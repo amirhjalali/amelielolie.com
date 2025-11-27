@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian: #050505;
+  --color-void: #0a0a0a;
+  --color-liquid-chrome: #E0E0E0;
+  
+  --color-skin-light: #FFE5E0;
+  --color-skin: #FFC1B6;
+  --color-skin-dim: #E8B0A6;
+  --color-skin-dark: #B38076;
+  
+  --font-serif: var(--font-playfair);
+  --font-mono: var(--font-geist-mono);
+
+  --background-image-chrome-gradient: linear-gradient(135deg, #E0E0E0 0%, #FFFFFF 50%, #909090 100%);
+  --background-image-skin-to-void: radial-gradient(circle at center, rgba(255, 193, 182, 0.15) 0%, rgba(5, 5, 5, 0) 70%);
+
+  --backdrop-blur-xs: 2px;
+  
+  --animate-pulse-slow: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fadeIn 0.8s ease-out forwards;
+  --animate-slide-up: slideUp 0.8s ease-out forwards;
+
+  @keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+:root {
+  --background: #050505;
+  --foreground: #E0E0E0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}
