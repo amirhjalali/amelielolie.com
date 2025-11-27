@@ -7,10 +7,10 @@ export const Navbar = () => {
       
       {/* Logo / Identity */}
       <Link href="/" className="group flex flex-col">
-        <span className="font-serif text-xl tracking-tight group-hover:text-skin transition-colors duration-300">
+        <span className="font-sans text-2xl tracking-tight font-medium text-white group-hover:text-skin transition-colors duration-300">
           Amelie Lolie
         </span>
-        <span className="font-mono text-[10px] tracking-[0.2em] opacity-50 group-hover:opacity-80 transition-opacity">
+        <span className="font-sans text-[10px] tracking-[0.25em] text-gray-500 group-hover:text-skin/70 transition-colors uppercase mt-0.5">
           DIGITAL ATELIER
         </span>
       </Link>
