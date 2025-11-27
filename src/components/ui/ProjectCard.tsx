@@ -16,26 +16,17 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ title, category, year,
       
       {/* Image Container with Zoom Effect */}
       <div className="absolute inset-0 transition-transform duration-700 ease-out group-hover:scale-105">
-         {/* 
-            Note: In a real implementation, we would use Next.js Image component. 
-            For this scaffold, we're using a div with a background color/placeholder to avoid broken images.
-            When real images are ready, replace this div with:
-            <Image src={imageSrc} alt={title} fill className="object-cover" />
-         */}
-         <div className="w-full h-full bg-void relative">
-            {/* Placeholder Visuals */}
-            <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-transparent to-transparent opacity-60" />
+         <Image 
+           src={imageSrc} 
+           alt={title} 
+           fill 
+           className="object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-700" 
+         />
+         
+         <div className="w-full h-full absolute inset-0 bg-gradient-to-t from-obsidian via-transparent to-transparent opacity-60" />
             
-            {/* Abstract Digital Noise / Texture for "Uncanny" feel */}
-            <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay" />
-            
-            {/* Placeholder Text for Development */}
-            <div className="absolute inset-0 flex items-center justify-center">
-                <span className="font-mono text-xs tracking-widest text-liquid-chrome/20 group-hover:text-liquid-chrome/40 transition-colors">
-                    [ IMG_DATA_MISSING ]
-                </span>
-            </div>
-         </div>
+         {/* Abstract Digital Noise / Texture for "Uncanny" feel */}
+         <div className="absolute inset-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay" />
       </div>
 
       {/* Overlay: "The Digital Veil" - Darkens slightly on hover to make text pop */}
