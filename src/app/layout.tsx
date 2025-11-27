@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { Navbar } from "@/components/Navbar";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -27,6 +28,7 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${geistMono.variable} antialiased bg-obsidian text-liquid-chrome`}
       >
+        <Navbar />
         {children}
       </body>
     </html>

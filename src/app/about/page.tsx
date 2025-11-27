@@ -5,25 +5,6 @@ export default function AboutPage() {
   return (
     <section className="relative min-h-screen w-full bg-obsidian text-liquid-chrome overflow-hidden selection:bg-skin selection:text-obsidian pt-32 pb-20 px-6 md:px-12">
       
-      {/* Navigation (Temporary until we have a proper Navbar component) */}
-      <nav className="absolute top-8 left-0 w-full px-6 md:px-12 flex justify-between items-center z-50">
-        <Link href="/" className="font-mono text-xs tracking-[0.2em] uppercase hover:text-skin transition-colors">
-          Amelie Lolie
-        </Link>
-        <div className="flex gap-8">
-          <Link href="/about" className="font-mono text-xs tracking-[0.2em] uppercase text-skin">
-            Identity
-          </Link>
-           {/* Placeholder links */}
-          <span className="font-mono text-xs tracking-[0.2em] uppercase text-liquid-chrome/30 cursor-not-allowed">
-            Work
-          </span>
-          <span className="font-mono text-xs tracking-[0.2em] uppercase text-liquid-chrome/30 cursor-not-allowed">
-            Labs
-          </span>
-        </div>
-      </nav>
-
       <div className="container mx-auto max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
         
         {/* Left Column: The "Digital Intelligence" / Metadata */}
