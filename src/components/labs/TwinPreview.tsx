@@ -8,16 +8,6 @@ const TARGET_RENDER_WIDTH = 1280;
 
 const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1);
 
-const formatTime = (value: number) => {
-  if (!Number.isFinite(value) || value < 0) return '--:--';
-  const totalSeconds = Math.floor(value);
-  const minutes = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, '0');
-  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-  return `${minutes}:${seconds}`;
-};
-
 export const TwinPreview = () => {
   const displayVideoRef = useRef<HTMLVideoElement>(null);
   const cacheVideoRef = useRef<HTMLVideoElement>(null);
@@ -223,20 +213,6 @@ export const TwinPreview = () => {
     return 'Stage 02 · Hybridizing';
   }, [identityBlend]);
 
-  const timelineReadout = useMemo(() => {
-    if (!duration) {
-      return '00:00 / --:--';
-    }
-    return `${formatTime(identityBlend * duration)} / ${formatTime(duration)}`;
-  }, [identityBlend, duration]);
-
-  const statusReadout = useMemo(() => {
-    if (cacheState === 'caching') return `assembling timeline ${Math.round(cacheProgress * 100)}%`;
-    if (cacheState === 'ready') return 'frame cache ready';
-    if (cacheState === 'error') return 'fallback: direct video scrub';
-    return 'initializing source';
-  }, [cacheState, cacheProgress]);
-
   const currentFrameSrc = useMemo(() => {
     if (!frameStrip || frameStrip.length === 0) return null;
     if (frameStrip.length === 1) return frameStrip[0];
@@ -302,11 +278,6 @@ export const TwinPreview = () => {
           <div className="text-liquid-chrome">{digitalPercent}% Digital</div>
         </div>
 
-        <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
-          <span>source: twin-xform.mp4</span>
-          <span>{statusReadout}</span>
-          <span>{timelineReadout}</span>
-        </div>
       </div>
 
       <div className="space-y-4 rounded-xl border border-white/5 bg-white/5 p-4 backdrop-blur-sm">

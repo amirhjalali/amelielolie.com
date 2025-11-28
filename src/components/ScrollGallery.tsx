@@ -108,7 +108,7 @@ const generateImageOffsets = () => {
     marginTop: Math.floor(seededRandom(index * 7) * 100),
     translateX: Math.floor(seededRandom(index * 13) * 16) - 8,
     rotate: (seededRandom(index * 17) * 3) - 1.5,
-    scrollOffset: seededRandom(index * 31) * 150,
+    scrollOffset: seededRandom(index * 31) * 80,
   }));
 };
 
@@ -217,14 +217,14 @@ export const ScrollGallery = () => {
   const getImageTransform = (globalIndex: number, offset: typeof imageOffsets[0]) => {
     const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
     
-    // Spread images more evenly - each image starts moving after more scroll distance
-    const imageStartScroll = globalIndex * 100 + offset.scrollOffset;
+    // Tighter packing - images start closer together
+    const imageStartScroll = globalIndex * 50 + offset.scrollOffset;
     
     // How much the image has "traveled"
     const travel = scrollY - imageStartScroll;
     
-    // Slower speed so images stay on screen longer
-    const speed = 0.5;
+    // Faster speed so more images fit in the scroll
+    const speed = 0.7;
     const yPosition = windowHeight - (travel * speed);
     
     // Keep images visible throughout - no fade out at top
@@ -245,7 +245,7 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[2000vh] relative bg-obsidian">
+    <div ref={containerRef} className="min-h-[1200vh] relative bg-obsidian">
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
       
