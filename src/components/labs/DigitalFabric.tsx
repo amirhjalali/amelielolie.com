@@ -133,19 +133,23 @@ const fragmentShader = `
     vec3 viewDir = normalize(cameraPosition - vWorldPosition);
     vec3 normal = normalize(vNormal);
     
-    // Silk base color - soft champagne/ivory
+    // Silk base color - rich blush/rose
     vec3 silkColor = uColor;
     
-    // Fresnel - silk has strong edge highlights
-    float fresnel = pow(1.0 - max(0.0, dot(viewDir, normal)), 3.0);
+    // Fresnel - silk has edge highlights
+    float fresnel = pow(1.0 - max(0.0, dot(viewDir, normal)), 4.0);
     
     // Anisotropic-like highlights (simplified) - silk has directional sheen
     vec3 tangent = normalize(cross(normal, vec3(0.0, 1.0, 0.0)));
-    vec3 bitangent = normalize(cross(normal, tangent));
     
     // Light directions
     vec3 light1 = normalize(vec3(1.0, 1.0, 0.5));
     vec3 light2 = normalize(vec3(-0.5, 0.8, 0.3));
+    
+    // Diffuse lighting
+    float diff1 = max(0.0, dot(normal, light1));
+    float diff2 = max(0.0, dot(normal, light2));
+    float diffuse = diff1 * 0.6 + diff2 * 0.3;
     
     // Anisotropic highlight calculation
     float dotTH1 = dot(tangent, normalize(light1 + viewDir));
@@ -153,38 +157,41 @@ const fragmentShader = `
     float sinTH1 = sqrt(1.0 - dotTH1 * dotTH1);
     float sinTH2 = sqrt(1.0 - dotTH2 * dotTH2);
     
-    float spec1 = pow(sinTH1, 16.0) * 0.8;
-    float spec2 = pow(sinTH2, 24.0) * 0.4;
+    float spec1 = pow(sinTH1, 32.0) * 0.25;
+    float spec2 = pow(sinTH2, 48.0) * 0.15;
     
-    // Fold shadows and highlights
-    float foldShading = smoothstep(-0.5, 0.5, vFold);
+    // Fold shadows and highlights - more contrast
+    float foldShading = smoothstep(-0.8, 0.8, vFold);
     
-    // Translucency - light passing through thin fabric
-    float backlight = max(0.0, dot(-viewDir, light1)) * 0.15;
-    vec3 translucency = silkColor * backlight * vec3(1.0, 0.95, 0.9);
+    // Shadow color - darker in folds
+    vec3 shadowColor = silkColor * 0.3;
     
-    // Combine
-    vec3 color = silkColor * (0.6 + foldShading * 0.4);
+    // Base color with fold variation
+    vec3 color = mix(shadowColor, silkColor, foldShading);
     
-    // Add silk sheen (the characteristic shimmer)
-    vec3 sheenColor = vec3(1.0, 0.98, 0.95);
-    color += sheenColor * spec1;
-    color += sheenColor * spec2 * vec3(1.0, 0.95, 0.9);
+    // Apply diffuse lighting
+    color *= (0.4 + diffuse * 0.6);
     
-    // Fresnel edge glow
-    color += fresnel * sheenColor * 0.3;
+    // Add silk sheen (the characteristic shimmer) - more subtle
+    vec3 sheenColor = vec3(1.0, 0.95, 0.92);
+    color += sheenColor * spec1 * foldShading;
+    color += sheenColor * spec2 * foldShading;
     
-    // Translucency
-    color += translucency;
+    // Fresnel edge highlight - subtle
+    color += fresnel * sheenColor * 0.15;
     
-    // Subtle color variation in folds
-    color = mix(color, color * vec3(0.95, 0.93, 0.98), (1.0 - foldShading) * 0.2);
+    // Translucency in thin areas
+    float backlight = max(0.0, dot(-viewDir, light1)) * 0.08;
+    color += silkColor * backlight;
     
-    // Very subtle iridescence
-    float irid = sin(vUv.x * 30.0 + vUv.y * 20.0 + uTime * 0.3) * 0.5 + 0.5;
-    color += vec3(0.02, 0.01, 0.03) * irid * fresnel;
+    // Subtle color shift in deep folds (cooler tones in shadows)
+    color = mix(color * vec3(0.9, 0.88, 0.95), color, foldShading);
     
-    gl_FragColor = vec4(color, 0.92);
+    // Very subtle iridescence at edges only
+    float irid = sin(vUv.x * 40.0 + vUv.y * 30.0 + uTime * 0.2) * 0.5 + 0.5;
+    color += vec3(0.03, 0.0, 0.02) * irid * fresnel * 0.5;
+    
+    gl_FragColor = vec4(color, 0.95);
   }
 `;
 
@@ -196,7 +203,7 @@ const SilkFabric = () => {
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
     uMouse: { value: new THREE.Vector2(0.5, 0.5) },
-    uColor: { value: new THREE.Color('#f5ebe0') }, // Soft champagne silk
+    uColor: { value: new THREE.Color('#e8b4a8') }, // Soft rose/blush silk
   }), []);
 
   useFrame(({ clock, pointer }) => {
@@ -254,27 +261,27 @@ export const DigitalFabric = () => {
         >
           <color attach="background" args={['#0a0908']} />
           
-          {/* Soft studio lighting */}
-          <ambientLight intensity={0.3} color="#f5f0eb" />
+          {/* Soft studio lighting - reduced intensity */}
+          <ambientLight intensity={0.15} color="#f5f0eb" />
           
-          {/* Key light - warm */}
+          {/* Key light - warm, softer */}
           <directionalLight 
             position={[3, 4, 2]} 
-            intensity={1.2} 
+            intensity={0.8} 
             color="#fff8f0"
           />
           
-          {/* Fill light - cool */}
+          {/* Fill light - cool, subtle */}
           <directionalLight 
             position={[-2, 2, 3]} 
-            intensity={0.4} 
-            color="#e8f0ff"
+            intensity={0.25} 
+            color="#e0e8f0"
           />
           
-          {/* Rim light */}
+          {/* Rim light - very subtle */}
           <pointLight 
             position={[0, -2, 4]} 
-            intensity={0.3} 
+            intensity={0.15} 
             color="#ffffff"
           />
           
