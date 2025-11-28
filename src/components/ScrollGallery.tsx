@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import Image from 'next/image';
 
 // All gallery images from the old site
@@ -93,30 +93,110 @@ const GALLERY_IMAGES = [
   'ffe6dc5594758a3503ac03f9668349b1.jpg',
 ];
 
+// Seeded random for consistent "random" offsets
+const seededRandom = (seed: number) => {
+  const x = Math.sin(seed * 9999) * 10000;
+  return x - Math.floor(x);
+};
+
+// Generate random offsets for each image (consistent across renders)
+const generateImageOffsets = () => {
+  return GALLERY_IMAGES.map((_, index) => ({
+    // Random vertical offset within column (0-150px)
+    marginTop: Math.floor(seededRandom(index * 7) * 120),
+    // Random horizontal nudge (-10 to 10px)
+    translateX: Math.floor(seededRandom(index * 13) * 20) - 10,
+    // Slight rotation (-2 to 2 degrees)
+    rotate: (seededRandom(index * 17) * 4) - 2,
+  }));
+};
+
+const GalleryImage = ({ 
+  image, 
+  offset 
+}: { 
+  image: string; 
+  offset: { marginTop: number; translateX: number; rotate: number };
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isInView, setIsInView] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Image is "in view" when it enters from bottom
+        if (entry.isIntersecting) {
+          setIsInView(true);
+        }
+      },
+      {
+        rootMargin: '100px 0px -50px 0px', // Trigger slightly before fully in view
+        threshold: 0.1,
+      }
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="group cursor-pointer"
+      style={{
+        marginTop: `${offset.marginTop}px`,
+        transform: isInView 
+          ? `translateX(${offset.translateX}px) translateY(0) rotate(${offset.rotate}deg)` 
+          : `translateX(${offset.translateX}px) translateY(100px) rotate(${offset.rotate}deg)`,
+        opacity: isInView ? 1 : 0,
+        transition: 'transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease-out',
+      }}
+    >
+      <div className="overflow-hidden rounded-sm">
+        <Image
+          src={`/gallery/${image}`}
+          alt=""
+          width={600}
+          height={800}
+          className="w-full h-auto transition-transform duration-700 group-hover:scale-[1.03]"
+          sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
+          loading="lazy"
+          unoptimized
+        />
+      </div>
+    </div>
+  );
+};
+
 export const ScrollGallery = () => {
-  const [visibleImages, setVisibleImages] = useState<Set<number>>(new Set());
   const [hasStartedScrolling, setHasStartedScrolling] = useState(false);
+  
+  // Generate consistent random offsets
+  const imageOffsets = useMemo(() => generateImageOffsets(), []);
+
+  // Distribute images into columns (staggered distribution for organic feel)
+  const columns = useMemo(() => {
+    const numCols = 4; // We'll use CSS to make this responsive
+    const cols: { image: string; offset: typeof imageOffsets[0] }[][] = Array.from({ length: numCols }, () => []);
+    
+    // Distribute images in a scattered pattern
+    GALLERY_IMAGES.forEach((image, index) => {
+      // Use seeded random to pick column (not just modulo)
+      const colIndex = Math.floor(seededRandom(index * 23) * numCols);
+      cols[colIndex].push({ image, offset: imageOffsets[index] });
+    });
+    
+    return cols;
+  }, [imageOffsets]);
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      
-      // Detect if user has started scrolling
-      if (scrollTop > 50 && !hasStartedScrolling) {
+      if (window.scrollY > 80 && !hasStartedScrolling) {
         setHasStartedScrolling(true);
       }
-      
-      // Calculate how many images to show based on scroll
-      // Show ~3 images per 100px of scroll after initial scroll
-      const numVisible = hasStartedScrolling 
-        ? Math.min(Math.floor(scrollTop / 30), GALLERY_IMAGES.length)
-        : 0;
-      
-      const newVisible = new Set<number>();
-      for (let i = 0; i < numVisible; i++) {
-        newVisible.add(i);
-      }
-      setVisibleImages(newVisible);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -126,66 +206,42 @@ export const ScrollGallery = () => {
   }, [hasStartedScrolling]);
 
   return (
-    <div className="min-h-[400vh] relative bg-obsidian">
+    <div className="min-h-[300vh] relative bg-obsidian">
       {/* Initial empty screen with scroll indicator */}
       <div 
-        className="h-screen flex items-center justify-center sticky top-0 z-10 pointer-events-none transition-opacity duration-700"
+        className="h-screen flex items-center justify-center fixed inset-0 z-20 pointer-events-none transition-opacity duration-1000"
         style={{ opacity: hasStartedScrolling ? 0 : 1 }}
       >
         <div className="flex flex-col items-center gap-6">
-          <span className="font-mono text-[11px] tracking-[0.4em] text-liquid-chrome/40 uppercase">
+          <span className="font-mono text-[11px] tracking-[0.4em] text-liquid-chrome/50 uppercase">
             Scroll to explore
           </span>
-          <div className="w-px h-16 bg-gradient-to-b from-liquid-chrome/40 to-transparent animate-pulse" />
+          <div className="w-px h-20 bg-gradient-to-b from-liquid-chrome/50 to-transparent animate-pulse" />
         </div>
       </div>
 
-      {/* Gallery - CSS Columns for true masonry */}
+      {/* Gallery Grid - Manual columns for organic spacing */}
       <div 
-        className="px-4 md:px-8 lg:px-12 pb-32 pt-8 transition-opacity duration-700"
-        style={{ 
-          opacity: hasStartedScrolling ? 1 : 0,
-          marginTop: '-100vh' // Pull up to overlap with the sticky element
-        }}
+        className="px-6 md:px-10 lg:px-16 pb-40 pt-[30vh] transition-opacity duration-1000"
+        style={{ opacity: hasStartedScrolling ? 1 : 0.3 }}
       >
-        <div 
-          className="columns-2 md:columns-3 lg:columns-4 gap-3 md:gap-4"
-          style={{ columnFill: 'balance' }}
-        >
-          {GALLERY_IMAGES.map((image, index) => {
-            const isVisible = visibleImages.has(index);
-            
-            return (
-              <div
-                key={image}
-                className="break-inside-avoid mb-3 md:mb-4 overflow-hidden rounded-sm transition-all duration-500 ease-out group"
-                style={{
-                  opacity: isVisible ? 1 : 0,
-                  transform: isVisible ? 'translateY(0)' : 'translateY(30px)',
-                }}
-              >
-                <div className="relative cursor-pointer">
-                  <Image
-                    src={`/gallery/${image}`}
-                    alt=""
-                    width={600}
-                    height={800}
-                    className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.02]"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    loading="lazy"
-                    unoptimized
-                  />
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-obsidian/0 group-hover:bg-obsidian/10 transition-colors duration-300" />
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex gap-6 md:gap-10 lg:gap-14">
+          {columns.map((column, colIndex) => (
+            <div 
+              key={colIndex} 
+              className="flex-1 flex flex-col gap-8 md:gap-12 lg:gap-16"
+              style={{
+                // Stagger column start positions
+                marginTop: `${colIndex * 60}px`,
+              }}
+            >
+              {column.map(({ image, offset }) => (
+                <GalleryImage key={image} image={image} offset={offset} />
+              ))}
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* Footer spacer */}
-      <div className="h-32" />
     </div>
   );
 };
