@@ -113,15 +113,20 @@ const generateImageOffsets = () => {
 
 const GalleryImage = ({ 
   image, 
-  offset 
+  offset,
+  hasScrolled 
 }: { 
   image: string; 
   offset: { marginTop: number; translateX: number; rotate: number };
+  hasScrolled: boolean;
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [isInView, setIsInView] = useState(false);
 
   useEffect(() => {
+    // Don't observe until scrolling has started
+    if (!hasScrolled) return;
+    
     const observer = new IntersectionObserver(
       ([entry]) => {
         // Image is "in view" when it enters from bottom
@@ -140,7 +145,7 @@ const GalleryImage = ({
     }
 
     return () => observer.disconnect();
-  }, []);
+  }, [hasScrolled]);
 
   return (
     <div
@@ -223,7 +228,7 @@ export const ScrollGallery = () => {
       {/* Gallery Grid - Manual columns for organic spacing */}
       <div 
         className="px-6 md:px-10 lg:px-16 pb-40 pt-[30vh] transition-opacity duration-1000"
-        style={{ opacity: hasStartedScrolling ? 1 : 0.3 }}
+        style={{ opacity: hasStartedScrolling ? 1 : 0 }}
       >
         <div className="flex gap-6 md:gap-10 lg:gap-14">
           {columns.map((column, colIndex) => (
@@ -236,7 +241,7 @@ export const ScrollGallery = () => {
               }}
             >
               {column.map(({ image, offset }) => (
-                <GalleryImage key={image} image={image} offset={offset} />
+                <GalleryImage key={image} image={image} offset={offset} hasScrolled={hasStartedScrolling} />
               ))}
             </div>
           ))}
