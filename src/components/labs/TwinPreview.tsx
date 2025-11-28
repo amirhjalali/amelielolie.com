@@ -2,81 +2,114 @@
 
 import { Suspense, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, PresentationControls } from '@react-three/drei';
+import { Environment, OrbitControls, PerspectiveCamera, Float } from '@react-three/drei';
 import * as THREE from 'three';
 
-const AvatarFigure = ({ identity }: { identity: number }) => {
-  const bodyRef = useRef<THREE.Mesh>(null);
-  const chromeRef = useRef<THREE.Mesh>(null);
+const AvatarEntity = ({ identity }: { identity: number }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const wireframeRef = useRef<THREE.Mesh>(null);
+  const solidRef = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
-    const waver = Math.sin(clock.elapsedTime * 0.6) * 0.05;
-    if (bodyRef.current) {
-      bodyRef.current.rotation.y = waver;
-      const skinMaterial = bodyRef.current.material as THREE.MeshPhysicalMaterial;
-      skinMaterial.color.setRGB(1 - identity * 0.3, 0.8 - identity * 0.4, 0.75 - identity * 0.4);
-      skinMaterial.transmission = 0.3 + identity * 0.4;
+    if (groupRef.current) {
+      groupRef.current.rotation.y = clock.getElapsedTime() * 0.2;
+      groupRef.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.3) * 0.1;
     }
-    if (chromeRef.current) {
-      chromeRef.current.visible = identity > 0.1;
-      chromeRef.current.scale.setScalar(1 + identity * 0.05);
+    
+    // Pulse effect for wireframe
+    if (wireframeRef.current) {
+       const material = wireframeRef.current.material as THREE.MeshBasicMaterial;
+       material.opacity = 0.1 + Math.sin(clock.getElapsedTime() * 2.0) * 0.05 + (1.0 - identity) * 0.2;
+    }
+    
+    // Identity blend logic
+    if (solidRef.current) {
+        solidRef.current.scale.setScalar(0.98); // Slightly smaller to sit inside wireframe
+        const material = solidRef.current.material as THREE.MeshPhysicalMaterial;
+        
+        // Transition from "Human Skin" to "Digital Chrome"
+        // Identity 0 = Human, 1 = Digital
+        
+        const humanColor = new THREE.Color('#FFC1B6'); // Skin
+        const digitalColor = new THREE.Color('#E0E0E0'); // Chrome
+        
+        material.color.lerpColors(humanColor, digitalColor, identity);
+        material.metalness = identity; // 0 to 1
+        material.roughness = 0.4 - (identity * 0.3); // 0.4 (skin) to 0.1 (chrome)
+        material.transmission = 0.2 * (1.0 - identity); // Skin has some subsurface scattering-like transmission
     }
   });
 
   return (
-    <group>
-      <mesh ref={bodyRef} castShadow>
-        <capsuleGeometry args={[0.4, 1.6, 32, 64]} />
-        <meshPhysicalMaterial
-          roughness={0.15}
-          metalness={0.1}
-          transmission={0.35}
-          thickness={0.5}
-          envMapIntensity={1}
-        />
-      </mesh>
-      <mesh ref={chromeRef} position={[0, 0.2, 0]}>
-        <icosahedronGeometry args={[0.45, 1]} />
-        <meshStandardMaterial
-          color="#d8d8ff"
-          metalness={1}
-          roughness={0.1}
-          emissiveIntensity={identity * 0.5}
-        />
-      </mesh>
+    <group ref={groupRef}>
+      <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
+        {/* The Complex Geometry Entity */}
+        <mesh ref={solidRef}>
+          <torusKnotGeometry args={[0.8, 0.25, 128, 32]} />
+          <meshPhysicalMaterial 
+            color="#FFC1B6"
+            roughness={0.4}
+            metalness={0.0}
+            clearcoat={0.5}
+            clearcoatRoughness={0.1}
+          />
+        </mesh>
+
+        {/* The Digital Construct Wireframe */}
+        <mesh ref={wireframeRef}>
+          <torusKnotGeometry args={[0.85, 0.26, 64, 16]} />
+          <meshBasicMaterial 
+            color="#E0E0E0" 
+            wireframe 
+            transparent 
+            opacity={0.1} 
+          />
+        </mesh>
+      </Float>
     </group>
   );
 };
 
 export const TwinPreview = () => {
-  const [identityBlend, setIdentityBlend] = useState(0.35);
+  const [identityBlend, setIdentityBlend] = useState(0.5);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden border border-white/5 bg-black/60">
+      <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden border border-white/5 bg-gradient-to-b from-obsidian to-void">
         <Suspense
           fallback={
             <div className="absolute inset-0 flex items-center justify-center text-xs tracking-[0.3em] text-liquid-chrome/40 uppercase">
-              Spawning meta-human...
+              Constructing Geometry...
             </div>
           }
         >
-          <Canvas camera={{ position: [0, 0.8, 3.2], fov: 35 }} dpr={[1, 2]}>
+          <Canvas dpr={[1, 2]}>
+            <PerspectiveCamera makeDefault position={[0, 0, 4]} />
+            
             <color attach="background" args={['#050505']} />
-            <ambientLight intensity={0.4} />
-            <spotLight position={[4, 6, 3]} intensity={2.5} angle={0.4} penumbra={0.6} />
-            <PresentationControls global config={{ mass: 2, tension: 400 }} rotation={[0, 0, 0]} polar={[-0.1, 0.2]}>
-              <AvatarFigure identity={identityBlend} />
-            </PresentationControls>
+            
+            {/* Lighting Setup */}
+            <ambientLight intensity={0.2} />
+            <spotLight position={[5, 5, 5]} intensity={1.5} angle={0.3} penumbra={1} color="#ffffff" />
+            <spotLight position={[-5, -5, -5]} intensity={0.5} color="#FFC1B6" />
+            <pointLight position={[0, 0, 3]} intensity={0.5} color="#E0E0E0" distance={5} />
+            
+            <AvatarEntity identity={identityBlend} />
+            
             <Environment preset="city" />
+            <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.5} />
           </Canvas>
         </Suspense>
+        
+        <div className="absolute top-4 left-4 font-mono text-[9px] text-skin tracking-widest uppercase opacity-70">
+           Subject: Torus_Knot_001
+        </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-4 p-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-sm">
         <div className="flex justify-between text-xs font-mono tracking-[0.2em] text-liquid-chrome/70 uppercase">
-          <span>Human</span>
-          <span>Digital</span>
+          <span>Biological</span>
+          <span>Synthetic</span>
         </div>
         <input
           type="range"
@@ -85,13 +118,17 @@ export const TwinPreview = () => {
           step={0.01}
           value={identityBlend}
           onChange={(event) => setIdentityBlend(Number(event.target.value))}
-          className="w-full accent-skin"
+          className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-skin hover:accent-white transition-all"
         />
-        <p className="font-mono text-[11px] tracking-[0.2em] text-liquid-chrome/60 uppercase">
-          Identity mix: {(identityBlend * 100).toFixed(0)}%
-        </p>
+        <div className="flex justify-between items-center border-t border-white/10 pt-3 mt-2">
+            <p className="font-mono text-[10px] tracking-[0.2em] text-liquid-chrome/40 uppercase">
+              Interpolation
+            </p>
+            <p className="font-mono text-[11px] tracking-[0.2em] text-skin uppercase">
+              {(identityBlend * 100).toFixed(0)}%
+            </p>
+        </div>
       </div>
     </div>
   );
 };
-
