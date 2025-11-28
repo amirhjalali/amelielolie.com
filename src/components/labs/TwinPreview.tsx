@@ -19,18 +19,20 @@ const formatTime = (value: number) => {
 };
 
 export const TwinPreview = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const displayVideoRef = useRef<HTMLVideoElement>(null);
+  const cacheVideoRef = useRef<HTMLVideoElement>(null);
   const [identityBlend, setIdentityBlend] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [videoReady, setVideoReady] = useState(false);
   const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'ready' | 'error'>('idle');
   const [frameStrip, setFrameStrip] = useState<string[] | null>(null);
   const [cacheProgress, setCacheProgress] = useState(0);
   const seekFrameRef = useRef<number | null>(null);
   const pendingSeekTimeRef = useRef<number | null>(null);
+  const metadataReadyRef = useRef(false);
+  const cacheStartedRef = useRef(false);
 
   useEffect(() => {
-    const video = videoRef.current;
+    const video = displayVideoRef.current;
     if (!video) return;
 
     const handleMetadata = () => {
@@ -38,7 +40,6 @@ export const TwinPreview = () => {
     };
 
     const handleReady = () => {
-      setVideoReady(true);
       video.pause();
     };
 
@@ -58,7 +59,7 @@ export const TwinPreview = () => {
   }, []);
 
   const applyPendingSeek = useCallback(() => {
-    const video = videoRef.current;
+    const video = displayVideoRef.current;
     if (!video || pendingSeekTimeRef.current == null) return;
     video.currentTime = pendingSeekTimeRef.current;
     pendingSeekTimeRef.current = null;

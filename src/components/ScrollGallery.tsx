@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 
 // All gallery images from the old site (excluding icons/logos)
@@ -103,13 +103,78 @@ const generateImageOffsets = () => {
     marginTop: Math.floor(seededRandom(index * 7) * 100),
     translateX: Math.floor(seededRandom(index * 13) * 16) - 8,
     rotate: (seededRandom(index * 17) * 3) - 1.5,
-    // Each image has a different "trigger point" for when it starts moving
-    scrollOffset: seededRandom(index * 31) * 200,
+    scrollOffset: seededRandom(index * 31) * 150,
   }));
+};
+
+// Lightbox component
+const Lightbox = ({ 
+  image, 
+  onClose 
+}: { 
+  image: string | null; 
+  onClose: () => void;
+}) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    
+    if (image) {
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [image, onClose]);
+
+  if (!image) return null;
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/95 backdrop-blur-sm cursor-zoom-out"
+      onClick={onClose}
+    >
+      {/* Close button */}
+      <button 
+        className="absolute top-6 right-6 text-liquid-chrome/70 hover:text-white transition-colors z-10"
+        onClick={onClose}
+      >
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+      
+      {/* Image */}
+      <div 
+        className="relative max-w-[90vw] max-h-[90vh] animate-fade-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Image
+          src={`/gallery/${image}`}
+          alt=""
+          width={1600}
+          height={2000}
+          className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
+          unoptimized
+          priority
+        />
+      </div>
+      
+      {/* Hint */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[10px] text-liquid-chrome/40 tracking-widest uppercase">
+        Press ESC or click to close
+      </div>
+    </div>
+  );
 };
 
 export const ScrollGallery = () => {
   const [scrollY, setScrollY] = useState(0);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const imageOffsets = useMemo(() => generateImageOffsets(), []);
@@ -139,30 +204,32 @@ export const ScrollGallery = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const closeLightbox = useCallback(() => {
+    setLightboxImage(null);
+  }, []);
+
   // Calculate how far each image should have traveled based on scroll
-  // Images start below the viewport and scroll up through and past the viewport
   const getImageTransform = (globalIndex: number, offset: typeof imageOffsets[0]) => {
     const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
     
-    // Each image has a staggered start point based on its index and random offset
-    const imageStartScroll = globalIndex * 40 + offset.scrollOffset;
+    // Spread images more evenly - each image starts moving after more scroll distance
+    const imageStartScroll = globalIndex * 60 + offset.scrollOffset;
     
-    // How much the image has "traveled" (0 = hasn't started, positive = moving up)
+    // How much the image has "traveled"
     const travel = scrollY - imageStartScroll;
     
-    // Image starts below screen and moves up continuously
-    // No clamping at top - images can scroll past the top of the viewport
-    const speed = 0.8;
+    // Slower speed so images stay on screen longer
+    const speed = 0.6;
     const yPosition = windowHeight - (travel * speed);
     
-    // Opacity: fade in when entering, fade out when leaving top
+    // Keep images visible - only fade slightly at extremes
     let opacity = 0;
     if (travel > 0) {
-      // Fade in
-      opacity = Math.min(1, travel / 150);
-      // Fade out when image goes above viewport (yPosition becomes very negative)
-      if (yPosition < -200) {
-        opacity = Math.max(0, 1 - (Math.abs(yPosition + 200) / 300));
+      // Quick fade in
+      opacity = Math.min(1, travel / 100);
+      // Very gradual fade out only when well past the top
+      if (yPosition < -400) {
+        opacity = Math.max(0, 1 - (Math.abs(yPosition + 400) / 600));
       }
     }
     
@@ -177,7 +244,10 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[600vh] relative bg-obsidian">
+    <div ref={containerRef} className="min-h-[800vh] relative bg-obsidian">
+      {/* Lightbox */}
+      <Lightbox image={lightboxImage} onClose={closeLightbox} />
+      
       {/* Scroll hint */}
       <div 
         className="fixed inset-0 z-20 flex items-center justify-center pointer-events-none transition-opacity duration-700"
@@ -213,6 +283,7 @@ export const ScrollGallery = () => {
                       opacity: transform.opacity,
                       transition: 'opacity 0.3s ease-out',
                     }}
+                    onClick={() => setLightboxImage(image)}
                   >
                     <div className="overflow-hidden rounded-sm">
                       <Image
@@ -220,7 +291,7 @@ export const ScrollGallery = () => {
                         alt=""
                         width={600}
                         height={800}
-                        className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.02]"
+                        className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
                         sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
                         loading="lazy"
                         unoptimized
