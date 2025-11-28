@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import Image from 'next/image';
 
-// All gallery images from the old site
+// All gallery images from the old site (excluding icons/logos)
 const GALLERY_IMAGES = [
   '0f558fc6f63b5b8db339e396f7980573.jpg',
   '102b3d9b67a90fd0f7f26ccc04f6968f.jpg',
@@ -73,7 +73,6 @@ const GALLERY_IMAGES = [
   'cb168bd2a642e118e051cc1e33a41eb3.jpg',
   'cb187029f2581255a09721edc189f79e.jpg',
   'd4cdcbf822081a6b587ec467b7f1a7b6.jpg',
-  'd6223c1e3a856a9988d1e1d6580b724a.jpg',
   'd6332c5f3a34841b0db1818b1c24054f.jpg',
   'd91b50a730497690a1411a304b82642e.jpg',
   'dc458e8c23c4fa0e71b6de6ee93c7bc5.jpg',
@@ -99,99 +98,32 @@ const seededRandom = (seed: number) => {
   return x - Math.floor(x);
 };
 
-// Generate random offsets for each image (consistent across renders)
+// Generate random offsets for each image
 const generateImageOffsets = () => {
   return GALLERY_IMAGES.map((_, index) => ({
-    // Random vertical offset within column (0-150px)
-    marginTop: Math.floor(seededRandom(index * 7) * 120),
-    // Random horizontal nudge (-10 to 10px)
-    translateX: Math.floor(seededRandom(index * 13) * 20) - 10,
-    // Slight rotation (-2 to 2 degrees)
-    rotate: (seededRandom(index * 17) * 4) - 2,
+    marginTop: Math.floor(seededRandom(index * 7) * 100),
+    translateX: Math.floor(seededRandom(index * 13) * 16) - 8,
+    rotate: (seededRandom(index * 17) * 3) - 1.5,
+    // Each image has a different "trigger point" for when it starts moving
+    scrollOffset: seededRandom(index * 31) * 200,
   }));
 };
 
-const GalleryImage = ({ 
-  image, 
-  offset,
-  hasScrolled 
-}: { 
-  image: string; 
-  offset: { marginTop: number; translateX: number; rotate: number };
-  hasScrolled: boolean;
-}) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [isInView, setIsInView] = useState(false);
-
-  useEffect(() => {
-    // Don't observe until scrolling has started
-    if (!hasScrolled) return;
-    
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // Image is "in view" when it enters from bottom
-        if (entry.isIntersecting) {
-          setIsInView(true);
-        }
-      },
-      {
-        rootMargin: '100px 0px -50px 0px', // Trigger slightly before fully in view
-        threshold: 0.1,
-      }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasScrolled]);
-
-  return (
-    <div
-      ref={ref}
-      className="group cursor-pointer"
-      style={{
-        marginTop: `${offset.marginTop}px`,
-        transform: isInView 
-          ? `translateX(${offset.translateX}px) translateY(0) rotate(${offset.rotate}deg)` 
-          : `translateX(${offset.translateX}px) translateY(100px) rotate(${offset.rotate}deg)`,
-        opacity: isInView ? 1 : 0,
-        transition: 'transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease-out',
-      }}
-    >
-      <div className="overflow-hidden rounded-sm">
-        <Image
-          src={`/gallery/${image}`}
-          alt=""
-          width={600}
-          height={800}
-          className="w-full h-auto transition-transform duration-700 group-hover:scale-[1.03]"
-          sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
-          loading="lazy"
-          unoptimized
-        />
-      </div>
-    </div>
-  );
-};
-
 export const ScrollGallery = () => {
-  const [hasStartedScrolling, setHasStartedScrolling] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  // Generate consistent random offsets
   const imageOffsets = useMemo(() => generateImageOffsets(), []);
 
-  // Distribute images into columns (staggered distribution for organic feel)
+  // Distribute images into columns with random assignment
   const columns = useMemo(() => {
-    const numCols = 4; // We'll use CSS to make this responsive
-    const cols: { image: string; offset: typeof imageOffsets[0] }[][] = Array.from({ length: numCols }, () => []);
+    const numCols = 4;
+    const cols: { image: string; offset: typeof imageOffsets[0]; globalIndex: number }[][] = 
+      Array.from({ length: numCols }, () => []);
     
-    // Distribute images in a scattered pattern
     GALLERY_IMAGES.forEach((image, index) => {
-      // Use seeded random to pick column (not just modulo)
       const colIndex = Math.floor(seededRandom(index * 23) * numCols);
-      cols[colIndex].push({ image, offset: imageOffsets[index] });
+      cols[colIndex].push({ image, offset: imageOffsets[index], globalIndex: index });
     });
     
     return cols;
@@ -199,23 +131,53 @@ export const ScrollGallery = () => {
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 80 && !hasStartedScrolling) {
-        setHasStartedScrolling(true);
-      }
+      setScrollY(window.scrollY);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [hasStartedScrolling]);
+  }, []);
+
+  // Calculate how far each image should have traveled based on scroll
+  // Images start below the viewport and scroll up into view
+  const getImageTransform = (globalIndex: number, offset: typeof imageOffsets[0]) => {
+    const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+    
+    // Each image has a staggered start point
+    const imageStartScroll = globalIndex * 15 + offset.scrollOffset;
+    
+    // How much the image has "traveled" (0 = hasn't started, positive = moving up)
+    const travel = scrollY - imageStartScroll;
+    
+    // Image starts at bottom of screen (windowHeight) and moves up
+    // Speed multiplier controls how fast images move relative to scroll
+    const speed = 1.2;
+    const yPosition = windowHeight - (travel * speed);
+    
+    // Clamp so images don't go above their natural position (0) or too far below
+    const clampedY = Math.max(0, Math.min(yPosition, windowHeight + 200));
+    
+    // Opacity fades in as image enters viewport
+    const opacity = travel > 0 ? Math.min(1, travel / 200) : 0;
+    
+    return {
+      y: clampedY,
+      opacity,
+      rotate: offset.rotate,
+      translateX: offset.translateX,
+    };
+  };
+
+  const showScrollHint = scrollY < 50;
 
   return (
-    <div className="min-h-[300vh] relative bg-obsidian">
-      {/* Initial empty screen with scroll indicator */}
+    <div ref={containerRef} className="min-h-[600vh] relative bg-obsidian">
+      {/* Scroll hint */}
       <div 
-        className="h-screen flex items-center justify-center fixed inset-0 z-20 pointer-events-none transition-opacity duration-1000"
-        style={{ opacity: hasStartedScrolling ? 0 : 1 }}
+        className="fixed inset-0 z-20 flex items-center justify-center pointer-events-none transition-opacity duration-700"
+        style={{ opacity: showScrollHint ? 1 : 0 }}
       >
         <div className="flex flex-col items-center gap-6">
           <span className="font-mono text-[11px] tracking-[0.4em] text-liquid-chrome/50 uppercase">
@@ -225,24 +187,44 @@ export const ScrollGallery = () => {
         </div>
       </div>
 
-      {/* Gallery Grid - Manual columns for organic spacing */}
-      <div 
-        className="px-6 md:px-10 lg:px-16 pb-40 pt-[30vh] transition-opacity duration-1000"
-        style={{ opacity: hasStartedScrolling ? 1 : 0 }}
-      >
-        <div className="flex gap-6 md:gap-10 lg:gap-14">
+      {/* Fixed viewport for gallery */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 flex gap-6 md:gap-10 lg:gap-14 px-6 md:px-10 lg:px-16 pt-24">
           {columns.map((column, colIndex) => (
             <div 
               key={colIndex} 
-              className="flex-1 flex flex-col gap-8 md:gap-12 lg:gap-16"
-              style={{
-                // Stagger column start positions
-                marginTop: `${colIndex * 60}px`,
-              }}
+              className="flex-1 flex flex-col gap-10 md:gap-14 lg:gap-20"
+              style={{ marginTop: `${colIndex * 80}px` }}
             >
-              {column.map(({ image, offset }) => (
-                <GalleryImage key={image} image={image} offset={offset} hasScrolled={hasStartedScrolling} />
-              ))}
+              {column.map(({ image, offset, globalIndex }) => {
+                const transform = getImageTransform(globalIndex, offset);
+                
+                return (
+                  <div
+                    key={image}
+                    className="pointer-events-auto group cursor-pointer"
+                    style={{
+                      marginTop: `${offset.marginTop}px`,
+                      transform: `translateY(${transform.y}px) translateX(${transform.translateX}px) rotate(${transform.rotate}deg)`,
+                      opacity: transform.opacity,
+                      transition: 'opacity 0.3s ease-out',
+                    }}
+                  >
+                    <div className="overflow-hidden rounded-sm">
+                      <Image
+                        src={`/gallery/${image}`}
+                        alt=""
+                        width={600}
+                        height={800}
+                        className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.02]"
+                        sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
+                        loading="lazy"
+                        unoptimized
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

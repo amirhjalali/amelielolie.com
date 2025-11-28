@@ -16,6 +16,7 @@ const MirrorShaderMaterial = shaderMaterial(
     uResolution: new THREE.Vector2(1, 1),
     uColorHigh: new THREE.Color('#E0E0E0'), // Chrome/White
     uColorLow: new THREE.Color('#050505'),  // Void/Black
+    uColorSkin: new THREE.Color('#FFC1B6'), // Salmon/Skin
     uDistortion: 0.0, // Level of glitch/distortion
     uSignalType: 1.0, // 1.0 = Camera, 0.0 = Synthetic
   },
@@ -32,6 +33,7 @@ const MirrorShaderMaterial = shaderMaterial(
     uniform vec2 uMouse;
     uniform vec3 uColorHigh;
     uniform vec3 uColorLow;
+    uniform vec3 uColorSkin;
     uniform float uDistortion;
     uniform float uSignalType;
     uniform vec2 uResolution;
@@ -102,7 +104,6 @@ const MirrorShaderMaterial = shaderMaterial(
       
       if (uSignalType > 0.5) {
         // Sample camera with distortion
-        // Use multiple samples to blur/smooth the height map slightly
         height = getLuminance(distortedUV, vec2(0.0));
       } else {
         // Synthetic height map from FBM
@@ -117,19 +118,13 @@ const MirrorShaderMaterial = shaderMaterial(
       }
 
       // 3. Compute Surface Normals (The "3D" Look)
-      // Differentiate the height map to get slope
-      vec2 pixelSize = vec2(1.0/1280.0, 1.0/720.0) * 2.0; // Slightly larger step for smoother normals
+      vec2 pixelSize = vec2(1.0/1280.0, 1.0/720.0) * 2.0; 
       float hL = getLuminance(distortedUV, vec2(-pixelSize.x, 0.0));
       float hR = getLuminance(distortedUV, vec2(pixelSize.x, 0.0));
       float hD = getLuminance(distortedUV, vec2(0.0, -pixelSize.y));
       float hU = getLuminance(distortedUV, vec2(0.0, pixelSize.y));
       
       if (uSignalType < 0.5) {
-          // Recalculate neighbors for synthetic mode (expensive but correct)
-          // Simplified: just assume the height computed earlier is somewhat smooth
-          // actually, let's just reuse the camera logic pattern for consistency,
-          // assuming uTexture is empty/black in synthetic mode is wrong. 
-          // For synthetic, we compute "fake" gradients from the fbm directly.
            float eps = 0.01;
            hL = fbm(distortedUV + vec2(-eps, 0.));
            hR = fbm(distortedUV + vec2(eps, 0.));
@@ -137,26 +132,35 @@ const MirrorShaderMaterial = shaderMaterial(
            hU = fbm(distortedUV + vec2(0., eps));
       }
 
-      vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.5)); // Z component controls "flatness"
+      vec3 normal = normalize(vec3(hL - hR, hD - hU, 0.5)); 
 
       // 4. Chrome / Studio Lighting Simulation
-      // Light direction
       vec3 lightDir = normalize(vec3(-1.0, 1.0, 1.0));
       vec3 viewDir = vec3(0.0, 0.0, 1.0);
       
-      // Specular reflection (The shiny part)
+      // Specular reflection
       vec3 halfDir = normalize(lightDir + viewDir);
       float spec = pow(max(dot(normal, halfDir), 0.0), 32.0);
       
-      // Fresnel (Rim lighting)
+      // Fresnel
       float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 4.0);
       
-      // Environment Reflection (Fake Matcap-ish)
-      // Map normal to 2D coordinates to sample a "gradient" or pattern
-      float reflection = sin(normal.x * 10.0 + normal.y * 5.0 + uTime);
+      // 5. Combine into Liquid Metal with Salmon Tint
       
-      // 5. Combine into Liquid Metal
-      vec3 baseColor = mix(uColorLow, uColorHigh, height);
+      // Mix logic:
+      // Dark areas = Low (Void)
+      // Mid tones = Skin (Salmon)
+      // High tones = High (Chrome)
+      
+      vec3 baseColor;
+      
+      if (height < 0.5) {
+          // Mix from Black to Salmon
+          baseColor = mix(uColorLow, uColorSkin, height * 2.0);
+      } else {
+          // Mix from Salmon to Chrome
+          baseColor = mix(uColorSkin, uColorHigh, (height - 0.5) * 2.0);
+      }
       
       // Add "Topographic" scan lines
       float topo = sin(height * 40.0 + uTime * 0.5);
@@ -164,11 +168,11 @@ const MirrorShaderMaterial = shaderMaterial(
       
       // Final Composite
       vec3 finalColor = baseColor;
-      finalColor += vec3(spec) * 1.5; // Add bright highlights
-      finalColor += vec3(fresnel) * uColorHigh; // Add rim light
-      finalColor += vec3(topoLine) * uColorHigh * 0.2; // Add subtle contour lines
+      finalColor += vec3(spec) * 1.5; // Highlights
+      finalColor += vec3(fresnel) * uColorHigh * 0.5; // Rim light (white)
+      finalColor += vec3(topoLine) * uColorSkin * 0.4; // Contour lines in salmon
       
-      // Add subtle chromatic aberration to the "glass"
+      // Add subtle chromatic aberration
       finalColor.r += normal.x * 0.05;
       finalColor.b -= normal.x * 0.05;
 
@@ -187,6 +191,7 @@ declare module '@react-three/fiber' {
       uMouse?: THREE.Vector2;
       uColorHigh?: THREE.Color;
       uColorLow?: THREE.Color;
+      uColorSkin?: THREE.Color;
       uDistortion?: number;
       uSignalType?: number;
       uResolution?: THREE.Vector2;
