@@ -47,19 +47,23 @@ export default function LabsPage() {
       </div>
 
       <div className="relative z-10 container mx-auto px-6 md:px-12">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3 max-w-2xl">
-            <p className="font-mono text-xs tracking-[0.4em] text-skin uppercase">ATELIER</p>
-            <h1 className="font-serif text-4xl md:text-5xl text-liquid-chrome uppercase">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-20 md:mb-32">
+          <div>
+            <p className="font-mono text-xs tracking-[0.4em] uppercase text-skin">
+              DIGITAL ATELIER
+            </p>
+            <h1 className="font-serif text-4xl md:text-5xl text-liquid-chrome uppercase mt-2">
               LAB
             </h1>
           </div>
-          <Link
-            href="/work"
-            className="font-mono text-xs tracking-[0.3em] uppercase text-liquid-chrome/60 hover:text-skin transition-colors"
-          >
-            ← Return to Work
-          </Link>
+          <div className="mt-8 md:mt-0 font-mono text-xs text-liquid-chrome/50 text-right">
+            <Link
+              href="/work"
+              className="hover:text-skin transition-colors"
+            >
+              ← RETURN TO WORK
+            </Link>
+          </div>
         </div>
 
         <div className="mt-16 grid grid-cols-1 md:grid-cols-[280px_auto] gap-10">

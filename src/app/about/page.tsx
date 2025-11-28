@@ -5,7 +5,24 @@ export default function AboutPage() {
   return (
     <section className="relative min-h-screen w-full bg-obsidian text-liquid-chrome overflow-hidden selection:bg-skin selection:text-obsidian pt-32 pb-20 px-6 md:px-12">
       
-      <div className="container mx-auto max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
+      <div className="container mx-auto max-w-6xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-20 md:mb-32">
+          <div>
+            <p className="font-mono text-xs tracking-[0.4em] uppercase text-skin">
+              CONSTRUCTING THE META-HUMAN
+            </p>
+            <h1 className="font-serif text-4xl md:text-5xl text-liquid-chrome uppercase mt-2">
+              ABOUT
+            </h1>
+          </div>
+          <div className="mt-8 md:mt-0 font-mono text-xs text-liquid-chrome/50 text-right">
+            <Link href="/work" className="hover:text-skin transition-colors">
+              ← RETURN TO WORK
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
         
         {/* Left Column: The "Digital Intelligence" / Metadata */}
         <div className="md:col-span-4 flex flex-col gap-12 sticky top-32">
@@ -64,16 +81,6 @@ export default function AboutPage() {
         {/* Right Column: The "Human" Narrative */}
         <div className="md:col-span-8 flex flex-col gap-20">
           
-          <div className="relative space-y-3">
-            <p className="font-mono text-xs md:text-sm tracking-[0.4em] uppercase text-skin">
-              CONSTRUCTING THE META-HUMAN
-            </p>
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl text-liquid-chrome uppercase leading-tight">
-              Meta-human Manifesto
-            </h1>
-            <div className="absolute -top-20 -right-20 w-[400px] h-[400px] bg-skin/5 rounded-full blur-[100px] -z-10" />
-          </div>
-
           <div className="prose prose-invert prose-lg max-w-none">
             <p className="font-serif text-2xl md:text-3xl leading-relaxed text-liquid-chrome/90">
               Bonjour! I'm Amelie Lolie—a French, Brooklyn-based digital artist who blends couture storytelling with intelligent systems.
@@ -130,7 +137,7 @@ export default function AboutPage() {
         </div>
 
       </div>
+      </div>
     </section>
   );
 }
-
