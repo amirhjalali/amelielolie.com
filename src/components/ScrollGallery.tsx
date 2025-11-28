@@ -182,25 +182,24 @@ export const ScrollGallery = () => {
                 return (
                   <div
                     key={image}
-                    className="relative overflow-hidden rounded-sm transition-all duration-700 ease-out"
+                    className="relative overflow-hidden rounded-sm transition-all duration-700 ease-out group cursor-pointer"
                     style={{
                       opacity: isVisible ? 1 : 0,
                       transform: isVisible ? 'translateY(0) scale(1)' : 'translateY(40px) scale(0.95)',
                       transitionDelay: `${delay}s`,
                     }}
                   >
-                    <div className="relative aspect-[3/4] w-full group cursor-pointer">
-                      <Image
-                        src={`/gallery/${image}`}
-                        alt=""
-                        fill
-                        className="object-cover transition-transform duration-700 group-hover:scale-105"
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                        loading="lazy"
-                      />
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-obsidian/0 group-hover:bg-obsidian/20 transition-colors duration-300" />
-                    </div>
+                    <Image
+                      src={`/gallery/${image}`}
+                      alt=""
+                      width={400}
+                      height={500}
+                      className="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-105"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      loading="lazy"
+                    />
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-obsidian/0 group-hover:bg-obsidian/20 transition-colors duration-300" />
                   </div>
                 );
               })}
