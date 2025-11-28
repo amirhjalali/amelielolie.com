@@ -1,10 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, extend, ThreeElements } from '@react-three/fiber';
 import { Environment, shaderMaterial } from '@react-three/drei';
 import * as THREE from 'three';
-import { extend } from '@react-three/fiber';
 
 const SilkMaterial = shaderMaterial(
   {
@@ -68,11 +67,13 @@ const SilkMaterial = shaderMaterial(
 
 extend({ SilkMaterial });
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      silkMaterial: React.ComponentProps<typeof SilkMaterial>;
-    }
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    silkMaterial: ThreeElements['shaderMaterial'] & {
+      uTime?: number;
+      uColorA?: THREE.Color;
+      uColorB?: THREE.Color;
+    };
   }
 }
 
