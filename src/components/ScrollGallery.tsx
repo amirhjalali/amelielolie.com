@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 
 // All gallery images from the old site
@@ -93,126 +93,99 @@ const GALLERY_IMAGES = [
   'ffe6dc5594758a3503ac03f9668349b1.jpg',
 ];
 
-// Masonry-style layout positions (column index for each image)
-const getColumnForIndex = (index: number, columns: number) => index % columns;
-
 export const ScrollGallery = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scrollProgress, setScrollProgress] = useState(0);
   const [visibleImages, setVisibleImages] = useState<Set<number>>(new Set());
-  const [columns, setColumns] = useState(4);
+  const [hasStartedScrolling, setHasStartedScrolling] = useState(false);
 
-  // Responsive columns
-  useEffect(() => {
-    const updateColumns = () => {
-      if (window.innerWidth < 640) setColumns(2);
-      else if (window.innerWidth < 1024) setColumns(3);
-      else setColumns(4);
-    };
-    updateColumns();
-    window.addEventListener('resize', updateColumns);
-    return () => window.removeEventListener('resize', updateColumns);
-  }, []);
-
-  // Scroll handler
   useEffect(() => {
     const handleScroll = () => {
-      if (!containerRef.current) return;
-      
       const scrollTop = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const docHeight = document.documentElement.scrollHeight - windowHeight;
       
-      // Calculate scroll progress (0 to 1)
-      const progress = Math.min(scrollTop / docHeight, 1);
-      setScrollProgress(progress);
+      // Detect if user has started scrolling
+      if (scrollTop > 50 && !hasStartedScrolling) {
+        setHasStartedScrolling(true);
+      }
       
-      // Determine which images should be visible based on scroll
-      // Images appear progressively as user scrolls
-      const totalImages = GALLERY_IMAGES.length;
-      const imagesPerScroll = totalImages / 0.9; // All images visible by 90% scroll
-      const numVisible = Math.floor(scrollTop / (windowHeight * 0.3) * 3);
+      // Calculate how many images to show based on scroll
+      // Show ~3 images per 100px of scroll after initial scroll
+      const numVisible = hasStartedScrolling 
+        ? Math.min(Math.floor(scrollTop / 30), GALLERY_IMAGES.length)
+        : 0;
       
       const newVisible = new Set<number>();
-      for (let i = 0; i < Math.min(numVisible, totalImages); i++) {
+      for (let i = 0; i < numVisible; i++) {
         newVisible.add(i);
       }
       setVisibleImages(newVisible);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // Initial call
+    handleScroll();
     
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Distribute images into columns
-  const columnArrays: string[][] = Array.from({ length: columns }, () => []);
-  GALLERY_IMAGES.forEach((img, index) => {
-    columnArrays[getColumnForIndex(index, columns)].push(img);
-  });
+  }, [hasStartedScrolling]);
 
   return (
-    <div ref={containerRef} className="min-h-[500vh] relative">
+    <div className="min-h-[400vh] relative bg-obsidian">
       {/* Initial empty screen with scroll indicator */}
-      <div className="h-screen flex items-end justify-center pb-16 sticky top-0 z-10 pointer-events-none">
-        <div 
-          className="flex flex-col items-center gap-4 transition-opacity duration-500"
-          style={{ opacity: scrollProgress < 0.05 ? 1 : 0 }}
-        >
-          <span className="font-mono text-[10px] tracking-[0.4em] text-liquid-chrome/40 uppercase">
+      <div 
+        className="h-screen flex items-center justify-center sticky top-0 z-10 pointer-events-none transition-opacity duration-700"
+        style={{ opacity: hasStartedScrolling ? 0 : 1 }}
+      >
+        <div className="flex flex-col items-center gap-6">
+          <span className="font-mono text-[11px] tracking-[0.4em] text-liquid-chrome/40 uppercase">
             Scroll to explore
           </span>
-          <div className="w-px h-12 bg-gradient-to-b from-liquid-chrome/40 to-transparent animate-pulse" />
+          <div className="w-px h-16 bg-gradient-to-b from-liquid-chrome/40 to-transparent animate-pulse" />
         </div>
       </div>
 
-      {/* Gallery Grid */}
-      <div className="fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute inset-0 flex gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 pt-20">
-          {columnArrays.map((columnImages, colIndex) => (
-            <div key={colIndex} className="flex-1 flex flex-col gap-2 sm:gap-3 md:gap-4">
-              {columnImages.map((image, imgIndex) => {
-                const globalIndex = colIndex + imgIndex * columns;
-                const isVisible = visibleImages.has(globalIndex);
-                
-                // Staggered animation delay based on position
-                const delay = (colIndex * 0.1) + (imgIndex * 0.05);
-                
-                return (
-                  <div
-                    key={image}
-                    className="relative overflow-hidden rounded-sm transition-all duration-700 ease-out group cursor-pointer"
-                    style={{
-                      opacity: isVisible ? 1 : 0,
-                      transform: isVisible ? 'translateY(0) scale(1)' : 'translateY(40px) scale(0.95)',
-                      transitionDelay: `${delay}s`,
-                    }}
-                  >
-                    <Image
-                      src={`/gallery/${image}`}
-                      alt=""
-                      width={400}
-                      height={500}
-                      className="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-105"
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      loading="lazy"
-                    />
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-obsidian/0 group-hover:bg-obsidian/20 transition-colors duration-300" />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+      {/* Gallery - CSS Columns for true masonry */}
+      <div 
+        className="px-4 md:px-8 lg:px-12 pb-32 pt-8 transition-opacity duration-700"
+        style={{ 
+          opacity: hasStartedScrolling ? 1 : 0,
+          marginTop: '-100vh' // Pull up to overlap with the sticky element
+        }}
+      >
+        <div 
+          className="columns-2 md:columns-3 lg:columns-4 gap-3 md:gap-4"
+          style={{ columnFill: 'balance' }}
+        >
+          {GALLERY_IMAGES.map((image, index) => {
+            const isVisible = visibleImages.has(index);
+            
+            return (
+              <div
+                key={image}
+                className="break-inside-avoid mb-3 md:mb-4 overflow-hidden rounded-sm transition-all duration-500 ease-out group"
+                style={{
+                  opacity: isVisible ? 1 : 0,
+                  transform: isVisible ? 'translateY(0)' : 'translateY(30px)',
+                }}
+              >
+                <div className="relative cursor-pointer">
+                  <Image
+                    src={`/gallery/${image}`}
+                    alt=""
+                    width={600}
+                    height={800}
+                    className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.02]"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    loading="lazy"
+                    unoptimized
+                  />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-obsidian/0 group-hover:bg-obsidian/10 transition-colors duration-300" />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Progress indicator */}
-      <div className="fixed bottom-8 right-8 z-20 font-mono text-[10px] text-liquid-chrome/30 tracking-widest">
-        {Math.round(scrollProgress * 100)}%
-      </div>
+      {/* Footer spacer */}
+      <div className="h-32" />
     </div>
   );
 };
-
