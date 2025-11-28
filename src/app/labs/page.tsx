@@ -17,10 +17,10 @@ const experiments = [
   },
   {
     key: 'mirror',
-    title: 'The Mirror',
-    subtitle: 'Cursor-driven identity distortion',
+    title: 'Identity Mirror',
+    subtitle: 'Neural signal reflection',
     description:
-      'A shader-based fluid system that refracts the UI as you move, referencing the oil-slick aura of the meta-human.',
+      'A real-time camera interface that interprets your physical presence into the brand\'s digital aesthetic. Features luminance-based chrome mapping and fluid distortion.',
     Component: FluidMirror,
   },
   {
@@ -34,7 +34,7 @@ const experiments = [
 ] as const;
 
 export default function LabsPage() {
-  const [activeKey, setActiveKey] = useState<(typeof experiments)[number]['key']>('fabric');
+  const [activeKey, setActiveKey] = useState<(typeof experiments)[number]['key']>('mirror');
   const activeExperiment = experiments.find((exp) => exp.key === activeKey) ?? experiments[0];
   const ActiveComponent = activeExperiment.Component;
 
