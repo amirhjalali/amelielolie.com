@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, OrbitControls, PerspectiveCamera, Float } from '@react-three/drei';
+import { Environment, OrbitControls, PerspectiveCamera, Float, Sparkles, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 
 const AvatarEntity = ({ identity }: { identity: number }) => {
@@ -20,11 +20,15 @@ const AvatarEntity = ({ identity }: { identity: number }) => {
     if (wireframeRef.current) {
        const material = wireframeRef.current.material as THREE.MeshBasicMaterial;
        material.opacity = 0.1 + Math.sin(clock.getElapsedTime() * 2.0) * 0.05 + (1.0 - identity) * 0.2;
+       
+       // Expand wireframe slightly based on identity
+       const scale = 1.0 + (identity * 0.1);
+       wireframeRef.current.scale.setScalar(scale);
     }
     
     // Identity blend logic
     if (solidRef.current) {
-        solidRef.current.scale.setScalar(0.98); // Slightly smaller to sit inside wireframe
+        solidRef.current.scale.setScalar(0.95);
         const material = solidRef.current.material as THREE.MeshPhysicalMaterial;
         
         // Transition from "Human Skin" to "Digital Chrome"
@@ -34,9 +38,10 @@ const AvatarEntity = ({ identity }: { identity: number }) => {
         const digitalColor = new THREE.Color('#E0E0E0'); // Chrome
         
         material.color.lerpColors(humanColor, digitalColor, identity);
-        material.metalness = identity; // 0 to 1
-        material.roughness = 0.4 - (identity * 0.3); // 0.4 (skin) to 0.1 (chrome)
+        material.metalness = identity * 1.0; // 0 to 1
+        material.roughness = 0.35 - (identity * 0.25); // 0.35 (skin) to 0.1 (chrome)
         material.transmission = 0.2 * (1.0 - identity); // Skin has some subsurface scattering-like transmission
+        material.clearcoat = identity;
     }
   });
 
@@ -45,7 +50,7 @@ const AvatarEntity = ({ identity }: { identity: number }) => {
       <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
         {/* The Complex Geometry Entity */}
         <mesh ref={solidRef}>
-          <torusKnotGeometry args={[0.8, 0.25, 128, 32]} />
+          <torusKnotGeometry args={[0.8, 0.25, 128, 64]} />
           <meshPhysicalMaterial 
             color="#FFC1B6"
             roughness={0.4}
@@ -57,7 +62,7 @@ const AvatarEntity = ({ identity }: { identity: number }) => {
 
         {/* The Digital Construct Wireframe */}
         <mesh ref={wireframeRef}>
-          <torusKnotGeometry args={[0.85, 0.26, 64, 16]} />
+          <torusKnotGeometry args={[0.8, 0.25, 64, 16]} />
           <meshBasicMaterial 
             color="#E0E0E0" 
             wireframe 
@@ -65,6 +70,16 @@ const AvatarEntity = ({ identity }: { identity: number }) => {
             opacity={0.1} 
           />
         </mesh>
+        
+        {/* Internal Particles representing 'soul' or 'data' */}
+        <Sparkles 
+            count={50} 
+            scale={2} 
+            size={2} 
+            speed={0.4} 
+            opacity={0.5} 
+            color={identity > 0.5 ? "#E0E0E0" : "#FFC1B6"} 
+        />
       </Float>
     </group>
   );
@@ -97,7 +112,11 @@ export const TwinPreview = () => {
             <AvatarEntity identity={identityBlend} />
             
             <Environment preset="city" />
+            <ContactShadows position={[0, -1.5, 0]} opacity={0.4} scale={10} blur={2.5} far={4} />
             <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.5} />
+            
+            {/* Floating dust/data particles in the environment */}
+            <Sparkles count={100} scale={8} size={1} speed={0.2} opacity={0.2} color="#ffffff" />
           </Canvas>
         </Suspense>
         
