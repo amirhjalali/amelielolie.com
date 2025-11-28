@@ -1,14 +1,9 @@
 import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import type { Project } from '@/content/projects';
 
-interface ProjectCardProps {
-  title: string;
-  category: string;
-  year: string;
-  imageSrc: string; // We'll use a placeholder for now
-  slug: string;
-}
+type ProjectCardProps = Pick<Project, "title" | "category" | "year" | "imageSrc" | "slug">;
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({ title, category, year, imageSrc, slug }) => {
   return (

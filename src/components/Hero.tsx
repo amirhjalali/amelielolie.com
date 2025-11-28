@@ -27,23 +27,14 @@ export const Hero = () => {
         </div>
 
         {/* Main Headline - Human Voice (Serif) */}
-        <h1 className="max-w-5xl font-serif text-5xl md:text-7xl lg:text-8xl leading-[1.1] tracking-tight text-transparent bg-clip-text bg-chrome-gradient opacity-0 animate-slide-up" style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}>
-          Curating Identity in the <br />
-          <span className="italic font-light text-skin-light/90">Post-Physical Age.</span>
-        </h1>
-
-        {/* Glassmorphism Bio Card - Digital Voice (Mono) */}
-        <div className="mt-12 max-w-2xl p-px rounded-xl bg-gradient-to-b from-white/20 to-transparent opacity-0 animate-slide-up" style={{ animationDelay: '0.6s', animationFillMode: 'forwards' }}>
-          <div className="rounded-xl p-8 bg-obsidian/40 backdrop-blur-[12px] border border-white/5 relative overflow-hidden group">
-            
-            {/* Hover overlay effect */}
-            <div className="absolute inset-0 bg-skin/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-
-            <p className="relative font-mono text-sm md:text-base leading-relaxed text-liquid-chrome/80 tracking-wide">
-              Exploring the boundaries between <span className="text-skin">biological self</span> and <span className="text-white">digital representation</span> through AI and Fashion. 
-              We construct the meta-human aesthetic for a new era of existence.
-            </p>
-          </div>
+        <div className="text-center space-y-6">
+          <h1
+            className="font-serif text-5xl md:text-7xl lg:text-8xl leading-[1.1] tracking-tight text-transparent bg-clip-text bg-chrome-gradient opacity-0 animate-slide-up"
+            style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}
+          >
+            Identity in the <br />
+            <span className="italic font-light text-skin-light/90">Digital Age.</span>
+          </h1>
         </div>
 
       </div>
