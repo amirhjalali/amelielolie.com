@@ -17,7 +17,6 @@ const GALLERY_IMAGES = [
   '2a77a1d11c1dc8103d1e9a137bb09425.jpg',
   '2b6322b2f3864a8c884176a588ef1f8e.jpg',
   '2c045657adec107f1308e98f47b7a6c3.jpg',
-  '2da78a06e9d3ca5ca8f58aabbf773420.jpg',
   '2e46fd94ccd8ce66216b2eeabc3fb76e.jpg',
   '37dc682994ecf2e3bf241390e4df4173.jpg',
   '3818265301377fdde25b6476f9a99519.jpg',
@@ -141,29 +140,34 @@ export const ScrollGallery = () => {
   }, []);
 
   // Calculate how far each image should have traveled based on scroll
-  // Images start below the viewport and scroll up into view
+  // Images start below the viewport and scroll up through and past the viewport
   const getImageTransform = (globalIndex: number, offset: typeof imageOffsets[0]) => {
     const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
     
-    // Each image has a staggered start point
-    const imageStartScroll = globalIndex * 15 + offset.scrollOffset;
+    // Each image has a staggered start point based on its index and random offset
+    const imageStartScroll = globalIndex * 40 + offset.scrollOffset;
     
     // How much the image has "traveled" (0 = hasn't started, positive = moving up)
     const travel = scrollY - imageStartScroll;
     
-    // Image starts at bottom of screen (windowHeight) and moves up
-    // Speed multiplier controls how fast images move relative to scroll
-    const speed = 1.2;
+    // Image starts below screen and moves up continuously
+    // No clamping at top - images can scroll past the top of the viewport
+    const speed = 0.8;
     const yPosition = windowHeight - (travel * speed);
     
-    // Clamp so images don't go above their natural position (0) or too far below
-    const clampedY = Math.max(0, Math.min(yPosition, windowHeight + 200));
-    
-    // Opacity fades in as image enters viewport
-    const opacity = travel > 0 ? Math.min(1, travel / 200) : 0;
+    // Opacity: fade in when entering, fade out when leaving top
+    let opacity = 0;
+    if (travel > 0) {
+      // Fade in
+      opacity = Math.min(1, travel / 150);
+      // Fade out when image goes above viewport (yPosition becomes very negative)
+      if (yPosition < -200) {
+        opacity = Math.max(0, 1 - (Math.abs(yPosition + 200) / 300));
+      }
+    }
     
     return {
-      y: clampedY,
+      y: yPosition,
       opacity,
       rotate: offset.rotate,
       translateX: offset.translateX,
