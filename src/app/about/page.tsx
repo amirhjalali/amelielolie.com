@@ -16,9 +16,8 @@ export default function AboutPage() {
             </h1>
           </div>
           <div className="mt-8 md:mt-0 font-mono text-xs text-liquid-chrome/50 text-right">
-            <Link href="/work" className="hover:text-skin transition-colors">
-              ← RETURN TO WORK
-            </Link>
+            <p>IDENTITY: VERIFIED</p>
+            <p>STATUS: ONLINE</p>
           </div>
         </div>
 

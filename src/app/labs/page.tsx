@@ -57,12 +57,8 @@ export default function LabsPage() {
             </h1>
           </div>
           <div className="mt-8 md:mt-0 font-mono text-xs text-liquid-chrome/50 text-right">
-            <Link
-              href="/work"
-              className="hover:text-skin transition-colors"
-            >
-              ← RETURN TO WORK
-            </Link>
+            <p>SIMULATION: ACTIVE</p>
+            <p>RENDER: REALTIME</p>
           </div>
         </div>
 
