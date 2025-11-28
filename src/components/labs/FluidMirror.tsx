@@ -6,7 +6,7 @@ import { shaderMaterial } from '@react-three/drei';
 import { EffectComposer, ChromaticAberration, Noise, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
-// --- Shader Definition ---
+// --- Shader Definition (Liquid Chrome Identity) ---
 
 const MirrorShaderMaterial = shaderMaterial(
   {
