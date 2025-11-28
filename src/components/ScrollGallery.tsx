@@ -245,7 +245,7 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[3000vh] relative bg-obsidian">
+    <div ref={containerRef} className="min-h-[2000vh] relative bg-obsidian">
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
       
