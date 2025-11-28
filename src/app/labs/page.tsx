@@ -46,7 +46,7 @@ export default function LabsPage() {
         <div className="absolute bottom-0 left-[10%] w-[700px] h-[700px] bg-skin/20 rounded-full blur-[220px] opacity-40" />
       </div>
 
-      <div className="relative z-10 container mx-auto px-6 md:px-12">
+      <div className="relative z-10 w-full px-6 md:px-12">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-20 md:mb-32">
           <div>
             <p className="font-mono text-xs tracking-[0.4em] uppercase text-skin">
