@@ -59,7 +59,6 @@ const RAW_GALLERY_IMAGES = [
   'a5d0ef755d5abd0b794420f72dff2d19.jpg',
   'a5f998e2f48155a632e15d8a7c720857.jpg',
   'a79e1c8fa203d337448581200686d887.jpg',
-  'aae1687135ddaa24bb804979a5695bde.jpg',
   'ad8ce925eea9fd69956ea503fa7e82a4.jpg',
   'b291aa2773be225700c42c85141db3f6.jpg',
   'b4674eccd918c87c602cdc0248e201a3.jpg',
@@ -246,7 +245,7 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[1500vh] relative bg-obsidian">
+    <div ref={containerRef} className="min-h-[2000vh] relative bg-obsidian">
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
       
