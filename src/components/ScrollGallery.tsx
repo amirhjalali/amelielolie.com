@@ -219,7 +219,7 @@ export const ScrollGallery = () => {
     const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
     
     // Spread images more evenly - each image starts moving after more scroll distance
-    const imageStartScroll = globalIndex * 80 + offset.scrollOffset;
+    const imageStartScroll = globalIndex * 100 + offset.scrollOffset;
     
     // How much the image has "traveled"
     const travel = scrollY - imageStartScroll;
@@ -246,7 +246,7 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[1000vh] relative bg-obsidian">
+    <div ref={containerRef} className="min-h-[1500vh] relative bg-obsidian">
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
       
