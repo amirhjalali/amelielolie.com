@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useRef } from 'react';
-import { Canvas, extend, useFrame } from '@react-three/fiber';
+import { Canvas, extend, useFrame, ThreeElements } from '@react-three/fiber';
 import { shaderMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -45,16 +45,12 @@ const FluidShaderMaterial = shaderMaterial(
 
 extend({ FluidShaderMaterial });
 
-type FluidShaderMaterialImpl = {
-  uTime: number;
-  uMouse: THREE.Vector2;
-} & THREE.ShaderMaterial;
-
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      fluidShaderMaterial: React.ComponentProps<typeof FluidShaderMaterial>;
-    }
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    fluidShaderMaterial: ThreeElements['shaderMaterial'] & {
+      uTime?: number;
+      uMouse?: THREE.Vector2;
+    };
   }
 }
 
