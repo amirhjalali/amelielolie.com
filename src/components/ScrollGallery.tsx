@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import Image from 'next/image';
 
 // All gallery images from the old site (excluding icons/logos)
-const GALLERY_IMAGES = [
+const RAW_GALLERY_IMAGES = [
   '0f558fc6f63b5b8db339e396f7980573.jpg',
   '102b3d9b67a90fd0f7f26ccc04f6968f.jpg',
   '11f8d06ccea9ba44e3a18ac17ec00c91.jpg',
@@ -90,6 +90,12 @@ const GALLERY_IMAGES = [
   'fe20643b1f3e377e14907e2282d32d4a.jpg',
   'ffe6dc5594758a3503ac03f9668349b1.jpg',
 ];
+
+const EXCLUDED_GALLERY_IMAGES = new Set([
+  '2da78a06e9d3ca5ca8f58aabbf773420.jpg',
+]);
+
+const GALLERY_IMAGES = RAW_GALLERY_IMAGES.filter((image) => !EXCLUDED_GALLERY_IMAGES.has(image));
 
 // Seeded random for consistent "random" offsets
 const seededRandom = (seed: number) => {
@@ -213,24 +219,20 @@ export const ScrollGallery = () => {
     const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
     
     // Spread images more evenly - each image starts moving after more scroll distance
-    const imageStartScroll = globalIndex * 60 + offset.scrollOffset;
+    const imageStartScroll = globalIndex * 80 + offset.scrollOffset;
     
     // How much the image has "traveled"
     const travel = scrollY - imageStartScroll;
     
     // Slower speed so images stay on screen longer
-    const speed = 0.6;
+    const speed = 0.5;
     const yPosition = windowHeight - (travel * speed);
     
-    // Keep images visible - only fade slightly at extremes
+    // Keep images visible throughout - no fade out at top
     let opacity = 0;
     if (travel > 0) {
-      // Quick fade in
+      // Fade in
       opacity = Math.min(1, travel / 100);
-      // Very gradual fade out only when well past the top
-      if (yPosition < -400) {
-        opacity = Math.max(0, 1 - (Math.abs(yPosition + 400) / 600));
-      }
     }
     
     return {
@@ -244,7 +246,7 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[800vh] relative bg-obsidian">
+    <div ref={containerRef} className="min-h-[1000vh] relative bg-obsidian">
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
       
