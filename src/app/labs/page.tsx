@@ -50,7 +50,7 @@ export default function LabsPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-20 md:mb-32">
           <div>
             <p className="font-mono text-xs tracking-[0.4em] uppercase text-skin">
-              DIGITAL ATELIER
+              ATELIER
             </p>
             <h1 className="font-serif text-4xl md:text-5xl text-liquid-chrome uppercase mt-2">
               LAB
