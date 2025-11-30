@@ -3,7 +3,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh, FACEMESH_TESSELATION, FACEMESH_RIGHT_EYE, FACEMESH_RIGHT_EYEBROW, FACEMESH_LEFT_EYE, FACEMESH_LEFT_EYEBROW, FACEMESH_FACE_OVAL, FACEMESH_LIPS } from '@mediapipe/face_mesh';
 import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors } from '@mediapipe/drawing_utils';
+
+// Local implementation of drawConnectors to avoid import issues with @mediapipe/drawing_utils
+const drawConnectors = (
+    ctx: CanvasRenderingContext2D,
+    landmarks: any[],
+    connections: any[],
+    style: { color: string; lineWidth: number }
+) => {
+    const canvas = ctx.canvas;
+    ctx.save();
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = style.lineWidth;
+
+    for (const connection of connections) {
+        const start = landmarks[connection[0]];
+        const end = landmarks[connection[1]];
+        if (start && end) {
+            ctx.beginPath();
+            ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+            ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+};
 
 export const FaceLandmarks = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
