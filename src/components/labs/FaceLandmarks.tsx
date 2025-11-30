@@ -56,8 +56,14 @@ export const FaceLandmarks = () => {
         let faceMesh: any = null;
         let animationFrameId: number;
         let stream: MediaStream | null = null;
+        let isMounted = true;
 
         const onResults = (results: any) => {
+            if (!isMounted) return;
+
+            // Clear error if we are getting results (self-healing)
+            setError(null);
+
             // Calculate FPS
             const now = performance.now();
             const delta = now - lastFrameTimeRef.current;
@@ -145,6 +151,8 @@ export const FaceLandmarks = () => {
             try {
                 await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
 
+                if (!isMounted) return;
+
                 const global = window as any;
                 if (!global.FaceMesh) {
                     throw new Error('FaceMesh not found in global scope');
@@ -170,12 +178,18 @@ export const FaceLandmarks = () => {
                     video: { width: 1280, height: 720, facingMode: 'user' }
                 });
 
+                if (!isMounted) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
                     await videoRef.current.play();
 
                     // Start processing loop
                     const processFrame = async () => {
+                        if (!isMounted) return;
                         if (faceMesh && videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
                             await faceMesh.send({ image: videoRef.current });
                         }
@@ -185,15 +199,18 @@ export const FaceLandmarks = () => {
                 }
 
             } catch (err) {
-                console.error('Error initializing FaceMesh:', err);
-                setError('Failed to access camera or initialize models.');
-                setIsLoading(false);
+                if (isMounted) {
+                    console.error('Error initializing FaceMesh:', err);
+                    setError('Failed to access camera or initialize models.');
+                    setIsLoading(false);
+                }
             }
         };
 
         init();
 
         return () => {
+            isMounted = false;
             cancelAnimationFrame(animationFrameId);
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
