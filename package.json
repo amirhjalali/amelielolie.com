@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "frames": "node scripts/generateTwinFrames.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -25,6 +26,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "fluent-ffmpeg": "^2.1.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

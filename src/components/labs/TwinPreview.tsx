@@ -1,209 +1,42 @@
 'use client';
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-
-const TRANSFORMATION_VIDEO_PATH = '/videos/twin-xform.mp4';
-const FRAME_COUNT = 72;
-const TARGET_RENDER_WIDTH = 1280;
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { TWIN_FRAMES } from '@/content/twinFrames';
 
 const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1);
 
-export const TwinPreview = () => {
-  const displayVideoRef = useRef<HTMLVideoElement>(null);
-  const cacheVideoRef = useRef<HTMLVideoElement>(null);
-  const [identityBlend, setIdentityBlend] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'ready' | 'error'>('idle');
-  const [frameStrip, setFrameStrip] = useState<string[] | null>(null);
-  const [cacheProgress, setCacheProgress] = useState(0);
-  const seekFrameRef = useRef<number | null>(null);
-  const pendingSeekTimeRef = useRef<number | null>(null);
-  const metadataReadyRef = useRef(false);
-  const cacheStartedRef = useRef(false);
-
+const useFramePreloader = () => {
   useEffect(() => {
-    const video = displayVideoRef.current;
-    if (!video) return;
+    const handles: HTMLImageElement[] = [];
 
-    const handleMetadata = () => {
-      setDuration(video.duration || 0);
-    };
-
-    const handleReady = () => {
-      video.pause();
-    };
-
-    const handleError = () => {
-      setCacheState((prev) => (prev === 'ready' ? prev : 'error'));
-    };
-
-    video.addEventListener('loadedmetadata', handleMetadata);
-    video.addEventListener('loadeddata', handleReady);
-    video.addEventListener('error', handleError);
-
-    return () => {
-      video.removeEventListener('loadedmetadata', handleMetadata);
-      video.removeEventListener('loadeddata', handleReady);
-      video.removeEventListener('error', handleError);
-    };
-  }, []);
-
-  const applyPendingSeek = useCallback(() => {
-    const video = displayVideoRef.current;
-    if (!video || pendingSeekTimeRef.current == null) return;
-    video.currentTime = pendingSeekTimeRef.current;
-    pendingSeekTimeRef.current = null;
-  }, []);
-
-  const scheduleSeek = useCallback(() => {
-    if (seekFrameRef.current) {
-      cancelAnimationFrame(seekFrameRef.current);
-    }
-    seekFrameRef.current = requestAnimationFrame(() => {
-      seekFrameRef.current = null;
-      applyPendingSeek();
+    TWIN_FRAMES.forEach((src) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.loading = 'eager';
+      img.src = src;
+      handles.push(img);
     });
-  }, [applyPendingSeek]);
 
-  useEffect(() => {
     return () => {
-      if (seekFrameRef.current) {
-        cancelAnimationFrame(seekFrameRef.current);
-      }
+      handles.forEach((img) => {
+        img.src = '';
+      });
     };
   }, []);
+};
 
-  useEffect(() => {
-    if (!duration || metadataReadyRef.current) return;
-    pendingSeekTimeRef.current = clamp01(identityBlend) * duration;
-    scheduleSeek();
-    metadataReadyRef.current = true;
-  }, [duration, identityBlend, scheduleSeek]);
+const resolveFrameForBlend = (blend: number) => {
+  const frameCount: number = TWIN_FRAMES.length;
+  if (!frameCount) return null;
+  if (frameCount === 1) return TWIN_FRAMES[0];
 
-  const handleSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextBlend = clamp01(Number(event.target.value));
-    setIdentityBlend(nextBlend);
-    if ((cacheState !== 'ready' || !frameStrip) && duration) {
-      pendingSeekTimeRef.current = nextBlend * duration;
-      scheduleSeek();
-    }
-  };
+  const index = Math.min(frameCount - 1, Math.round(clamp01(blend) * (frameCount - 1)));
+  return TWIN_FRAMES[index];
+};
 
-  useEffect(() => {
-    if (cacheState !== 'idle') return;
-    const cacheVideo = cacheVideoRef.current;
-    if (!cacheVideo) return;
-
-    const startCaching = () => {
-      if (cacheStartedRef.current) return;
-      const captureDuration = cacheVideo.duration || duration;
-      if (!captureDuration) return;
-      if (!duration && captureDuration) {
-        setDuration(captureDuration);
-      }
-      cacheStartedRef.current = true;
-      let cancelled = false;
-
-      const captureFrames = async () => {
-        try {
-          setCacheState('caching');
-          setCacheProgress(0);
-          const intrinsicWidth = cacheVideo.videoWidth || TARGET_RENDER_WIDTH;
-          const intrinsicHeight = cacheVideo.videoHeight || Math.round(TARGET_RENDER_WIDTH * 0.5625);
-          const width = TARGET_RENDER_WIDTH;
-          const height = Math.round((intrinsicHeight / intrinsicWidth) * width);
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const context = canvas.getContext('2d', { willReadFrequently: true });
-          if (!context) {
-            throw new Error('Unable to capture timeline frames');
-          }
-
-          const frames: string[] = [];
-          const totalSteps = Math.max(1, FRAME_COUNT - 1);
-
-          const seekTo = (time: number) =>
-            new Promise<void>((resolve, reject) => {
-              let resolved = false;
-              const cleanup = () => {
-                cacheVideo.removeEventListener('seeked', handleSeeked);
-                cacheVideo.removeEventListener('error', handleError);
-              };
-
-              const handleSeeked = () => {
-                if (resolved) return;
-                resolved = true;
-                cleanup();
-                resolve();
-              };
-
-              const handleError = () => {
-                if (resolved) return;
-                resolved = true;
-                cleanup();
-                reject(new Error('Video seek failed while caching frames'));
-              };
-
-              cacheVideo.addEventListener('seeked', handleSeeked, { once: true });
-              cacheVideo.addEventListener('error', handleError, { once: true });
-              cacheVideo.currentTime = time;
-            });
-
-          cacheVideo.pause();
-          for (let i = 0; i < FRAME_COUNT; i += 1) {
-            if (cancelled) return;
-            const time = (captureDuration * i) / totalSteps;
-            await seekTo(time);
-            if (cancelled) return;
-            context.drawImage(cacheVideo, 0, 0, width, height);
-            let dataUrl: string;
-            try {
-              dataUrl = canvas.toDataURL('image/webp', 0.82);
-            } catch {
-              dataUrl = canvas.toDataURL('image/png');
-            }
-            frames[i] = dataUrl;
-            setCacheProgress((i + 1) / FRAME_COUNT);
-            await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-          }
-
-          if (cancelled) return;
-          setFrameStrip(frames);
-          setCacheProgress(1);
-          setCacheState('ready');
-        } catch (error) {
-          if (cancelled) return;
-          console.error(error);
-          setCacheState('error');
-        }
-      };
-
-      captureFrames();
-
-      return () => {
-        cancelled = true;
-      };
-    };
-
-    if (cacheVideo.readyState >= 1) {
-      const cleanup = startCaching();
-      return cleanup;
-    }
-
-    let activeCleanup: (() => void) | undefined;
-    const handleMetadata = () => {
-      activeCleanup = startCaching() ?? activeCleanup;
-    };
-
-    cacheVideo.addEventListener('loadedmetadata', handleMetadata);
-    return () => {
-      cacheVideo.removeEventListener('loadedmetadata', handleMetadata);
-      if (activeCleanup) {
-        activeCleanup();
-      }
-    };
-  }, [duration, cacheState]);
+export const TwinPreview = () => {
+  useFramePreloader();
+  const [identityBlend, setIdentityBlend] = useState(0);
 
   const organicPercent = useMemo(() => ((1 - identityBlend) * 100).toFixed(0), [identityBlend]);
   const digitalPercent = useMemo(() => (identityBlend * 100).toFixed(0), [identityBlend]);
@@ -213,15 +46,14 @@ export const TwinPreview = () => {
     return 'Stage 02 · Hybridizing';
   }, [identityBlend]);
 
-  const currentFrameSrc = useMemo(() => {
-    if (!frameStrip || frameStrip.length === 0) return null;
-    if (frameStrip.length === 1) return frameStrip[0];
-    const index = Math.min(
-      frameStrip.length - 1,
-      Math.round(identityBlend * (frameStrip.length - 1))
-    );
-    return frameStrip[index];
-  }, [frameStrip, identityBlend]);
+  const currentFrameSrc = useMemo(
+    () => resolveFrameForBlend(identityBlend),
+    [identityBlend]
+  );
+
+  const handleSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setIdentityBlend(clamp01(Number(event.target.value)));
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -229,31 +61,7 @@ export const TwinPreview = () => {
         <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_15%_25%,rgba(255,193,182,0.15),transparent_55%),radial-gradient(circle_at_80%_15%,rgba(113,206,255,0.25),transparent_60%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_60%)] mix-blend-overlay" />
 
-        <video
-          ref={displayVideoRef}
-          src={TRANSFORMATION_VIDEO_PATH}
-          preload="auto"
-          playsInline
-          muted
-          controls={false}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
-            cacheState === 'ready' ? 'opacity-0' : 'opacity-100'
-          }`}
-        />
-
-        <video
-          ref={cacheVideoRef}
-          src={TRANSFORMATION_VIDEO_PATH}
-          preload="auto"
-          playsInline
-          muted
-          controls={false}
-          className="absolute inset-0 h-0 w-0 opacity-0 pointer-events-none"
-          tabIndex={-1}
-          aria-hidden="true"
-        />
-
-        {cacheState === 'ready' && currentFrameSrc && (
+        {currentFrameSrc && (
           <img
             src={currentFrameSrc}
             alt="Digital twin transformation frame"
@@ -277,7 +85,6 @@ export const TwinPreview = () => {
           <div className="text-skin">{organicPercent}% Organic</div>
           <div className="text-liquid-chrome">{digitalPercent}% Digital</div>
         </div>
-
       </div>
 
       <div className="space-y-4 rounded-xl border border-white/5 bg-white/5 p-4 backdrop-blur-sm">

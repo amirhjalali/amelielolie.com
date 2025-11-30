@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { DigitalFabric } from '@/components/labs/DigitalFabric';
 import { FluidMirror } from '@/components/labs/FluidMirror';
-import { TwinPreview } from '@/components/labs/TwinPreview';
+import { AvatarCanvas } from '@/components/labs/AvatarCanvas';
 
 const experiments = [
   {
@@ -28,8 +28,8 @@ const experiments = [
     title: 'Digital Twin Preview',
     subtitle: 'Identity blend slider',
     description:
-      'A placeholder avatar rig that will host the outfit configurator. Blend between human warmth and chrome armor in real time.',
-    Component: TwinPreview,
+      'A high-fidelity avatar rig hosting the outfit configurator. Blend between human warmth and chrome armor in real time.',
+    Component: AvatarCanvas,
   },
 ] as const;
 
@@ -68,11 +68,10 @@ export default function LabsPage() {
               <button
                 key={experiment.key}
                 onClick={() => setActiveKey(experiment.key)}
-                className={`w-full text-left p-4 border rounded-xl transition-all duration-300 ${
-                  activeKey === experiment.key
+                className={`w-full text-left p-4 border rounded-xl transition-all duration-300 ${activeKey === experiment.key
                     ? 'border-skin bg-white/5 shadow-[0_0_30px_rgba(255,178,178,0.15)]'
                     : 'border-white/10 hover:border-skin/40 hover:bg-white/5'
-                }`}
+                  }`}
               >
                 <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-skin">{experiment.title}</p>
                 <p className="font-sans text-sm text-liquid-chrome/70 mt-2">{experiment.subtitle}</p>
