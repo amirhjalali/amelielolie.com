@@ -36,13 +36,16 @@ export const FaceLandmarks = () => {
     const [error, setError] = useState<string | null>(null);
     const [showVideo, setShowVideo] = useState(true);
     const [showMesh, setShowMesh] = useState(true);
+    const [showMask, setShowMask] = useState(false);
     const [fps, setFps] = useState(0);
     const [resolution, setResolution] = useState('0x0');
     const lastFrameTimeRef = useRef(0);
+    const maskImageRef = useRef<HTMLImageElement | null>(null);
 
     // Ref-based state for the callback loop
     const showVideoRef = useRef(showVideo);
     const showMeshRef = useRef(showMesh);
+    const showMaskRef = useRef(showMask);
 
     useEffect(() => {
         showVideoRef.current = showVideo;
@@ -53,10 +56,52 @@ export const FaceLandmarks = () => {
     }, [showMesh]);
 
     useEffect(() => {
+        showMaskRef.current = showMask;
+    }, [showMask]);
+
+    // Load mask image
+    useEffect(() => {
+        const img = new Image();
+        img.src = '/assets/mask.png';
+        img.onload = () => {
+            maskImageRef.current = img;
+        };
+    }, []);
+
+    useEffect(() => {
         let faceMesh: any = null;
         let animationFrameId: number;
         let stream: MediaStream | null = null;
         let isMounted = true;
+
+        const calculateFaceTransform = (landmarks: any[], width: number, height: number) => {
+            // Key landmarks for orientation
+            const leftEye = landmarks[33];
+            const rightEye = landmarks[263];
+            const topHead = landmarks[10];
+            const chin = landmarks[152];
+
+            // Center position (midpoint between eyes, slightly lowered for nose bridge)
+            const centerX = ((leftEye.x + rightEye.x) / 2) * width;
+            const centerY = ((leftEye.y + rightEye.y) / 2) * height;
+
+            // Calculate rotation (roll) from eyes
+            const dx = (rightEye.x - leftEye.x) * width;
+            const dy = (rightEye.y - leftEye.y) * height;
+            const angle = Math.atan2(dy, dx);
+
+            // Calculate scale based on face height (chin to top of head)
+            // We use a multiplier to ensure the mask covers the whole head including hair
+            const faceHeight = Math.sqrt(
+                Math.pow((chin.x - topHead.x) * width, 2) +
+                Math.pow((chin.y - topHead.y) * height, 2)
+            );
+
+            // Scale factor - adjusted for the specific mask image aspect ratio
+            const scale = faceHeight * 2.2;
+
+            return { x: centerX, y: centerY, angle, scale };
+        };
 
         const onResults = (results: any) => {
             if (!isMounted) return;
@@ -99,7 +144,34 @@ export const FaceLandmarks = () => {
                 canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
             }
 
-            // 2. Draw the Face Mesh
+            // 2. Draw the Face Mask (Layer 03)
+            if (showMaskRef.current && results.multiFaceLandmarks && maskImageRef.current) {
+                for (const landmarks of results.multiFaceLandmarks) {
+                    const { x, y, angle, scale } = calculateFaceTransform(landmarks, canvasElement.width, canvasElement.height);
+
+                    canvasCtx.save();
+                    canvasCtx.translate(x, y);
+                    canvasCtx.rotate(angle);
+
+                    // Draw image centered and scaled
+                    // The offset (y + scale * 0.1) adjusts the vertical alignment to match the eyes
+                    const aspectRatio = maskImageRef.current.width / maskImageRef.current.height;
+                    const drawWidth = scale * aspectRatio;
+                    const drawHeight = scale;
+
+                    canvasCtx.drawImage(
+                        maskImageRef.current,
+                        -drawWidth / 2,
+                        -drawHeight / 2 + (drawHeight * 0.1), // Slight vertical offset to align eyes
+                        drawWidth,
+                        drawHeight
+                    );
+
+                    canvasCtx.restore();
+                }
+            }
+
+            // 3. Draw the Face Mesh (Layer 02)
             if (showMeshRef.current && results.multiFaceLandmarks) {
                 const global = window as any;
                 for (const landmarks of results.multiFaceLandmarks) {
@@ -296,6 +368,17 @@ export const FaceLandmarks = () => {
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 02</div>
                     <div className={`font-sans text-sm ${showMesh ? 'text-skin' : 'text-liquid-chrome'}`}>
                         {showMesh ? 'Mesh Overlay Active' : 'Mesh Overlay Disabled'}
+                    </div>
+                </button>
+
+                <button
+                    onClick={() => setShowMask(!showMask)}
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group md:col-span-2 ${showMask ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
+                        }`}
+                >
+                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 03</div>
+                    <div className={`font-sans text-sm ${showMask ? 'text-skin' : 'text-liquid-chrome'}`}>
+                        {showMask ? 'Mask Overlay Active' : 'Mask Overlay Disabled'}
                     </div>
                 </button>
             </div>
