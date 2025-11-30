@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { DigitalFabric } from '@/components/labs/DigitalFabric';
 import { FluidMirror } from '@/components/labs/FluidMirror';
 import { AvatarCanvas } from '@/components/labs/AvatarCanvas';
+import { TwinPreview } from '@/components/labs/TwinPreview';
 
 const experiments = [
   {
@@ -24,11 +25,19 @@ const experiments = [
     Component: FluidMirror,
   },
   {
-    key: 'twin',
-    title: 'Digital Twin Preview',
-    subtitle: 'Identity blend slider',
+    key: 'identity',
+    title: 'Identity Slider',
+    subtitle: 'Human to Android Transformation',
     description:
-      'A high-fidelity avatar rig hosting the outfit configurator. Blend between human warmth and chrome armor in real time.',
+      'A timeline scrubber visualizing the metamorphosis from organic human to digital android identity.',
+    Component: TwinPreview,
+  },
+  {
+    key: 'twin',
+    title: 'Digital Twin',
+    subtitle: '3D Avatar Configuration',
+    description:
+      'A high-fidelity 3D avatar rig hosting the outfit configurator. Explore the digital twin in a three-dimensional space.',
     Component: AvatarCanvas,
   },
 ] as const;
@@ -69,8 +78,8 @@ export default function LabsPage() {
                 key={experiment.key}
                 onClick={() => setActiveKey(experiment.key)}
                 className={`w-full text-left p-4 border rounded-xl transition-all duration-300 ${activeKey === experiment.key
-                    ? 'border-skin bg-white/5 shadow-[0_0_30px_rgba(255,178,178,0.15)]'
-                    : 'border-white/10 hover:border-skin/40 hover:bg-white/5'
+                  ? 'border-skin bg-white/5 shadow-[0_0_30px_rgba(255,178,178,0.15)]'
+                  : 'border-white/10 hover:border-skin/40 hover:bg-white/5'
                   }`}
               >
                 <p className="font-mono text-[11px] tracking-[0.3em] uppercase text-skin">{experiment.title}</p>
