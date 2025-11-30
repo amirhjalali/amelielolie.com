@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh, FACEMESH_TESSELATION, FACEMESH_RIGHT_EYE, FACEMESH_RIGHT_EYEBROW, FACEMESH_LEFT_EYE, FACEMESH_LEFT_EYEBROW, FACEMESH_FACE_OVAL, FACEMESH_LIPS } from '@mediapipe/face_mesh';
-import { Camera } from '@mediapipe/camera_utils';
+
 
 // Local implementation of drawConnectors to avoid import issues with @mediapipe/drawing_utils
 const drawConnectors = (
@@ -53,8 +53,9 @@ export const FaceLandmarks = () => {
     }, [showMesh]);
 
     useEffect(() => {
-        let camera: Camera | null = null;
         let faceMesh: FaceMesh | null = null;
+        let animationFrameId: number;
+        let stream: MediaStream | null = null;
 
         const onResults = (results: any) => {
             // Calculate FPS
@@ -139,17 +140,25 @@ export const FaceLandmarks = () => {
 
                 faceMesh.onResults(onResults);
 
-                camera = new Camera(videoRef.current, {
-                    onFrame: async () => {
-                        if (faceMesh && videoRef.current) {
-                            await faceMesh.send({ image: videoRef.current });
-                        }
-                    },
-                    width: 1280,
-                    height: 720,
+                // Initialize Camera manually
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720, facingMode: 'user' }
                 });
 
-                await camera.start();
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
+
+                    // Start processing loop
+                    const processFrame = async () => {
+                        if (faceMesh && videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
+                            await faceMesh.send({ image: videoRef.current });
+                        }
+                        animationFrameId = requestAnimationFrame(processFrame);
+                    };
+                    processFrame();
+                }
+
             } catch (err) {
                 console.error('Error initializing FaceMesh:', err);
                 setError('Failed to access camera or initialize models.');
@@ -160,11 +169,9 @@ export const FaceLandmarks = () => {
         init();
 
         return () => {
-            if (camera) {
-                // Camera stop method might not be exposed directly in type definition but usually exists or we just stop tracks
-                // The Camera utility handles the loop, but we should stop the video element tracks
-                const stream = videoRef.current?.srcObject as MediaStream;
-                if (stream) stream.getTracks().forEach(track => track.stop());
+            cancelAnimationFrame(animationFrameId);
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
             }
             if (faceMesh) {
                 faceMesh.close();
