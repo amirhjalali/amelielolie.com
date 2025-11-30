@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { FaceMesh, FACEMESH_TESSELATION, FACEMESH_RIGHT_EYE, FACEMESH_RIGHT_EYEBROW, FACEMESH_LEFT_EYE, FACEMESH_LEFT_EYEBROW, FACEMESH_FACE_OVAL, FACEMESH_LIPS } from '@mediapipe/face_mesh';
+
 
 
 // Local implementation of drawConnectors to avoid import issues with @mediapipe/drawing_utils
@@ -53,7 +53,7 @@ export const FaceLandmarks = () => {
     }, [showMesh]);
 
     useEffect(() => {
-        let faceMesh: FaceMesh | null = null;
+        let faceMesh: any = null;
         let animationFrameId: number;
         let stream: MediaStream | null = null;
 
@@ -95,6 +95,7 @@ export const FaceLandmarks = () => {
 
             // 2. Draw the Face Mesh
             if (showMeshRef.current && results.multiFaceLandmarks) {
+                const global = window as any;
                 for (const landmarks of results.multiFaceLandmarks) {
                     // Config for drawing - Amelie Lolie Aesthetic
                     // Skin/Salmon: #FFC1B6, Chrome/White: #E0E0E0, Green/Matrix: #30FF30 (maybe too matrix-y, stick to brand)
@@ -103,30 +104,54 @@ export const FaceLandmarks = () => {
                     const landmarkConfig = { color: '#E0E0E0', lineWidth: 1, radius: 1 }; // Chrome points
 
                     // Draw Tessellation (The Mesh)
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_TESSELATION, connectConfig);
+                    if (global.FACEMESH_TESSELATION) {
+                        drawConnectors(canvasCtx, landmarks, global.FACEMESH_TESSELATION, connectConfig);
+                    }
 
                     // Draw Eyes - Sharp Chrome
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_RIGHT_EYE, { color: '#E0E0E0', lineWidth: 2 });
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_RIGHT_EYEBROW, { color: '#E0E0E0', lineWidth: 2 });
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_LEFT_EYE, { color: '#E0E0E0', lineWidth: 2 });
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_LEFT_EYEBROW, { color: '#E0E0E0', lineWidth: 2 });
+                    if (global.FACEMESH_RIGHT_EYE) drawConnectors(canvasCtx, landmarks, global.FACEMESH_RIGHT_EYE, { color: '#E0E0E0', lineWidth: 2 });
+                    if (global.FACEMESH_RIGHT_EYEBROW) drawConnectors(canvasCtx, landmarks, global.FACEMESH_RIGHT_EYEBROW, { color: '#E0E0E0', lineWidth: 2 });
+                    if (global.FACEMESH_LEFT_EYE) drawConnectors(canvasCtx, landmarks, global.FACEMESH_LEFT_EYE, { color: '#E0E0E0', lineWidth: 2 });
+                    if (global.FACEMESH_LEFT_EYEBROW) drawConnectors(canvasCtx, landmarks, global.FACEMESH_LEFT_EYEBROW, { color: '#E0E0E0', lineWidth: 2 });
 
                     // Draw Face Oval - Subtle boundary
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_FACE_OVAL, { color: '#FFC1B680', lineWidth: 1 });
+                    if (global.FACEMESH_FACE_OVAL) drawConnectors(canvasCtx, landmarks, global.FACEMESH_FACE_OVAL, { color: '#FFC1B680', lineWidth: 1 });
 
                     // Draw Lips - Highlight
-                    drawConnectors(canvasCtx, landmarks, FACEMESH_LIPS, { color: '#FFC1B6', lineWidth: 2 });
+                    if (global.FACEMESH_LIPS) drawConnectors(canvasCtx, landmarks, global.FACEMESH_LIPS, { color: '#FFC1B6', lineWidth: 2 });
                 }
             }
             canvasCtx.restore();
+        };
+
+        const loadScript = (src: string): Promise<void> => {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    resolve();
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = src;
+                script.crossOrigin = 'anonymous';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+                document.body.appendChild(script);
+            });
         };
 
         const init = async () => {
             if (!videoRef.current) return;
 
             try {
-                faceMesh = new FaceMesh({
-                    locateFile: (file) => {
+                await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+
+                const global = window as any;
+                if (!global.FaceMesh) {
+                    throw new Error('FaceMesh not found in global scope');
+                }
+
+                faceMesh = new global.FaceMesh({
+                    locateFile: (file: string) => {
                         return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
                     },
                 });
