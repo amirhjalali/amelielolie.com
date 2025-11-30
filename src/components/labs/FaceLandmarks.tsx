@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
-
+import { TRIANGULATION } from '@/utils/triangulation';
 
 
 // Local implementation of drawConnectors to avoid import issues with @mediapipe/drawing_utils
@@ -55,36 +55,23 @@ const FaceMask3D = ({
         const landmarks = results.multiFaceLandmarks[0];
 
         // Initialize Geometry (Indices & UVs) once
-        if (!initializedRef.current && results.multiFaceGeometry && results.multiFaceGeometry.length > 0) {
-            const faceGeometry = results.multiFaceGeometry[0];
+        if (!initializedRef.current) {
+            // Set Indices from static triangulation
+            geometry.setIndex(TRIANGULATION);
 
-            // Get Indices (Triangulation)
-            // The JS API for FaceGeometry might be tricky. 
-            // If getMesh() exists:
-            if (faceGeometry.getMesh) {
-                const meshData = faceGeometry.getMesh();
-                const indexArray = meshData.getIndexBufferList();
-                // const uvArray = meshData.getVertexBufferList(); // XYZUV (5 floats per vertex)
+            // Extract UVs (stride 2: u, v)
+            // Planar mapping: u = x, v = 1 - y (flip Y)
+            // We use the INITIAL frame as the reference "pose" for the texture.
+            const count = landmarks.length;
+            const uvs = new Float32Array(count * 2);
 
-                // Set Indices
-                geometry.setIndex(Array.from(indexArray));
-
-                // Extract UVs (stride 5: x, y, z, u, v)
-                // The standard UVs are "unfolded". We want frontal projection UVs for our photo mask.
-                // So we will IGNORE the standard UVs and calculate Planar UVs from the current (first) frame landmarks.
-                const count = landmarks.length;
-                const uvs = new Float32Array(count * 2);
-
-                for (let i = 0; i < count; i++) {
-                    // Planar mapping: u = x, v = 1 - y (flip Y)
-                    // We use the INITIAL frame as the reference "pose" for the texture.
-                    uvs[i * 2] = landmarks[i].x;
-                    uvs[i * 2 + 1] = 1.0 - landmarks[i].y;
-                }
-
-                geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-                initializedRef.current = true;
+            for (let i = 0; i < count; i++) {
+                uvs[i * 2] = landmarks[i].x;
+                uvs[i * 2 + 1] = 1.0 - landmarks[i].y;
             }
+
+            geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+            initializedRef.current = true;
         }
 
         // Update Vertices (Positions) every frame
@@ -94,7 +81,6 @@ const FaceMask3D = ({
 
             for (let i = 0; i < count; i++) {
                 // Map normalized (0-1) to Three.js coordinates
-                // We assume an Orthographic camera covering 0-1 or similar.
                 // MediaPipe: x: 0(left)->1(right), y: 0(top)->1(bottom)
                 // Three.js: x: -1(left)->1(right), y: -1(bottom)->1(top)
 
@@ -301,7 +287,6 @@ export const FaceLandmarks = () => {
                 faceMesh.setOptions({
                     maxNumFaces: 1,
                     refineLandmarks: true,
-                    enableFaceGeometry: true, // Enable 3D geometry
                     minDetectionConfidence: 0.5,
                     minTrackingConfidence: 0.5,
                 });
