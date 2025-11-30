@@ -113,23 +113,23 @@ const generateImageOffsets = () => {
 };
 
 // Lightbox component
-const Lightbox = ({ 
-  image, 
-  onClose 
-}: { 
-  image: string | null; 
+const Lightbox = ({
+  image,
+  onClose
+}: {
+  image: string | null;
   onClose: () => void;
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    
+
     if (image) {
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     }
-    
+
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
@@ -139,12 +139,12 @@ const Lightbox = ({
   if (!image) return null;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-obsidian/95 backdrop-blur-sm cursor-zoom-out"
       onClick={onClose}
     >
       {/* Close button */}
-      <button 
+      <button
         className="absolute top-6 right-6 text-liquid-chrome/70 hover:text-white transition-colors z-10"
         onClick={onClose}
       >
@@ -152,9 +152,9 @@ const Lightbox = ({
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>
       </button>
-      
+
       {/* Image */}
-      <div 
+      <div
         className="relative max-w-[90vw] max-h-[90vh] animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
@@ -168,7 +168,7 @@ const Lightbox = ({
           priority
         />
       </div>
-      
+
       {/* Hint */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[10px] text-liquid-chrome/40 tracking-widest uppercase">
         Press ESC or click to close
@@ -181,20 +181,20 @@ export const ScrollGallery = () => {
   const [scrollY, setScrollY] = useState(0);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   const imageOffsets = useMemo(() => generateImageOffsets(), []);
 
   // Distribute images into columns with random assignment
   const columns = useMemo(() => {
     const numCols = 4;
-    const cols: { image: string; offset: typeof imageOffsets[0]; globalIndex: number }[][] = 
+    const cols: { image: string; offset: typeof imageOffsets[0]; globalIndex: number }[][] =
       Array.from({ length: numCols }, () => []);
-    
+
     GALLERY_IMAGES.forEach((image, index) => {
       const colIndex = Math.floor(seededRandom(index * 23) * numCols);
       cols[colIndex].push({ image, offset: imageOffsets[index], globalIndex: index });
     });
-    
+
     return cols;
   }, [imageOffsets]);
 
@@ -205,8 +205,23 @@ export const ScrollGallery = () => {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
-    
+
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Fix hydration mismatch by using state for window height
+  const [windowHeight, setWindowHeight] = useState(800);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowHeight(window.innerHeight);
+    };
+
+    // Set initial height
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const closeLightbox = useCallback(() => {
@@ -215,25 +230,25 @@ export const ScrollGallery = () => {
 
   // Calculate how far each image should have traveled based on scroll
   const getImageTransform = (globalIndex: number, offset: typeof imageOffsets[0]) => {
-    const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
-    
+    // windowHeight is now a state variable to prevent hydration mismatch
+
     // Tighter packing - images start closer together
     const imageStartScroll = globalIndex * 50 + offset.scrollOffset;
-    
+
     // How much the image has "traveled"
     const travel = scrollY - imageStartScroll;
-    
+
     // Faster speed so more images fit in the scroll
     const speed = 0.7;
     const yPosition = windowHeight - (travel * speed);
-    
+
     // Keep images visible throughout - no fade out at top
     let opacity = 0;
     if (travel > 0) {
       // Fade in
       opacity = Math.min(1, travel / 100);
     }
-    
+
     return {
       y: yPosition,
       opacity,
@@ -248,9 +263,9 @@ export const ScrollGallery = () => {
     <div ref={containerRef} className="min-h-[1800vh] relative bg-obsidian">
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
-      
+
       {/* Scroll hint */}
-      <div 
+      <div
         className="fixed inset-0 z-20 flex items-center justify-center pointer-events-none transition-opacity duration-700"
         style={{ opacity: showScrollHint ? 1 : 0 }}
       >
@@ -266,14 +281,14 @@ export const ScrollGallery = () => {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 flex gap-6 md:gap-10 lg:gap-14 px-6 md:px-10 lg:px-16 pt-24">
           {columns.map((column, colIndex) => (
-            <div 
-              key={colIndex} 
+            <div
+              key={colIndex}
               className="flex-1 flex flex-col gap-10 md:gap-14 lg:gap-20"
               style={{ marginTop: `${colIndex * 80}px` }}
             >
               {column.map(({ image, offset, globalIndex }) => {
                 const transform = getImageTransform(globalIndex, offset);
-                
+
                 return (
                   <div
                     key={image}
