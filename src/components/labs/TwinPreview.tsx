@@ -1,42 +1,13 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import { TWIN_FRAMES } from '@/content/twinFrames';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1);
 
-const useFramePreloader = () => {
-  useEffect(() => {
-    const handles: HTMLImageElement[] = [];
-
-    TWIN_FRAMES.forEach((src) => {
-      const img = new Image();
-      img.decoding = 'async';
-      img.loading = 'eager';
-      img.src = src;
-      handles.push(img);
-    });
-
-    return () => {
-      handles.forEach((img) => {
-        img.src = '';
-      });
-    };
-  }, []);
-};
-
-const resolveFrameForBlend = (blend: number) => {
-  const frameCount: number = TWIN_FRAMES.length;
-  if (!frameCount) return null;
-  if (frameCount === 1) return TWIN_FRAMES[0];
-
-  const index = Math.min(frameCount - 1, Math.round(clamp01(blend) * (frameCount - 1)));
-  return TWIN_FRAMES[index];
-};
-
 export const TwinPreview = () => {
-  useFramePreloader();
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [identityBlend, setIdentityBlend] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   const organicPercent = useMemo(() => ((1 - identityBlend) * 100).toFixed(0), [identityBlend]);
   const digitalPercent = useMemo(() => (identityBlend * 100).toFixed(0), [identityBlend]);
@@ -46,13 +17,21 @@ export const TwinPreview = () => {
     return 'Stage 02 · Hybridizing';
   }, [identityBlend]);
 
-  const currentFrameSrc = useMemo(
-    () => resolveFrameForBlend(identityBlend),
-    [identityBlend]
-  );
-
   const handleSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setIdentityBlend(clamp01(Number(event.target.value)));
+    const val = clamp01(Number(event.target.value));
+    setIdentityBlend(val);
+
+    if (videoRef.current && duration > 0) {
+      videoRef.current.currentTime = val * duration;
+    }
+  };
+
+  const handleVideoLoaded = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+      // Ensure it starts at 0
+      videoRef.current.currentTime = 0;
+    }
   };
 
   return (
@@ -61,14 +40,14 @@ export const TwinPreview = () => {
         <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_15%_25%,rgba(255,193,182,0.15),transparent_55%),radial-gradient(circle_at_80%_15%,rgba(113,206,255,0.25),transparent_60%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_60%)] mix-blend-overlay" />
 
-        {currentFrameSrc && (
-          <img
-            src={currentFrameSrc}
-            alt="Digital twin transformation frame"
-            className="absolute inset-0 h-full w-full object-cover"
-            draggable={false}
-          />
-        )}
+        <video
+          ref={videoRef}
+          src="/videos/CyborgTransformation.mp4"
+          className="absolute inset-0 h-full w-full object-cover"
+          muted
+          playsInline
+          onLoadedMetadata={handleVideoLoaded}
+        />
 
         <div className="absolute inset-0 pointer-events-none mix-blend-screen opacity-60">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_78%,rgba(255,183,168,0.2),transparent_65%)]" />
