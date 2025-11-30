@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
-import { TRIANGULATION } from '@/utils/triangulation';
+import { TRIANGULATION, UVS } from '@/utils/triangulation';
 
 
 // Local implementation of drawConnectors to avoid import issues with @mediapipe/drawing_utils
@@ -59,18 +59,10 @@ const FaceMask3D = ({
             // Set Indices from static triangulation
             geometry.setIndex(TRIANGULATION);
 
-            // Extract UVs (stride 2: u, v)
-            // Planar mapping: u = x, v = 1 - y (flip Y)
-            // We use the INITIAL frame as the reference "pose" for the texture.
-            const count = landmarks.length;
-            const uvs = new Float32Array(count * 2);
-
-            for (let i = 0; i < count; i++) {
-                uvs[i * 2] = landmarks[i].x;
-                uvs[i * 2 + 1] = 1.0 - landmarks[i].y;
-            }
-
+            // Set UVs from static canonical model
+            const uvs = new Float32Array(UVS);
             geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+
             initializedRef.current = true;
         }
 
