@@ -20,7 +20,7 @@ const Avatar = () => {
 
 export const AvatarCanvas = () => {
     return (
-        <div className="w-full h-full min-h-[500px] relative">
+        <div className="w-full h-[600px] relative rounded-2xl overflow-hidden border border-white/10 bg-white/5">
             <Canvas dpr={[1, 2]} shadows>
                 <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
 
