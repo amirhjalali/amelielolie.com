@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
+import * as THREE from 'three';
 
 
 
@@ -29,6 +31,113 @@ const drawConnectors = (
     ctx.restore();
 };
 
+const FaceMask3D = ({
+    resultsRef,
+    maskImageSrc
+}: {
+    resultsRef: React.MutableRefObject<any>,
+    maskImageSrc: string
+}) => {
+    const meshRef = useRef<THREE.Mesh>(null);
+    const geometryRef = useRef<THREE.BufferGeometry>(null);
+    const texture = useLoader(THREE.TextureLoader, maskImageSrc);
+    const initializedRef = useRef(false);
+
+    useFrame(() => {
+        const mesh = meshRef.current;
+        const geometry = geometryRef.current;
+        const results = resultsRef.current;
+
+        if (!mesh || !geometry || !results || !results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+            return;
+        }
+
+        const landmarks = results.multiFaceLandmarks[0];
+
+        // Initialize Geometry (Indices & UVs) once
+        if (!initializedRef.current && results.multiFaceGeometry && results.multiFaceGeometry.length > 0) {
+            const faceGeometry = results.multiFaceGeometry[0];
+
+            // Get Indices (Triangulation)
+            // The JS API for FaceGeometry might be tricky. 
+            // If getMesh() exists:
+            if (faceGeometry.getMesh) {
+                const meshData = faceGeometry.getMesh();
+                const indexArray = meshData.getIndexBufferList();
+                // const uvArray = meshData.getVertexBufferList(); // XYZUV (5 floats per vertex)
+
+                // Set Indices
+                geometry.setIndex(Array.from(indexArray));
+
+                // Extract UVs (stride 5: x, y, z, u, v)
+                // The standard UVs are "unfolded". We want frontal projection UVs for our photo mask.
+                // So we will IGNORE the standard UVs and calculate Planar UVs from the current (first) frame landmarks.
+                const count = landmarks.length;
+                const uvs = new Float32Array(count * 2);
+
+                for (let i = 0; i < count; i++) {
+                    // Planar mapping: u = x, v = 1 - y (flip Y)
+                    // We use the INITIAL frame as the reference "pose" for the texture.
+                    uvs[i * 2] = landmarks[i].x;
+                    uvs[i * 2 + 1] = 1.0 - landmarks[i].y;
+                }
+
+                geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+                initializedRef.current = true;
+            }
+        }
+
+        // Update Vertices (Positions) every frame
+        if (initializedRef.current) {
+            const count = landmarks.length;
+            const positions = geometry.attributes.position.array as Float32Array;
+
+            for (let i = 0; i < count; i++) {
+                // Map normalized (0-1) to Three.js coordinates
+                // We assume an Orthographic camera covering 0-1 or similar.
+                // MediaPipe: x: 0(left)->1(right), y: 0(top)->1(bottom)
+                // Three.js: x: -1(left)->1(right), y: -1(bottom)->1(top)
+
+                const x = (landmarks[i].x * 2) - 1;
+                const y = -(landmarks[i].y * 2) + 1;
+                const z = -landmarks[i].z; // Depth (might need scaling)
+
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+            }
+
+            geometry.attributes.position.needsUpdate = true;
+
+            // Recalculate normals for lighting
+            geometry.computeVertexNormals();
+        }
+    });
+
+    // Create a placeholder geometry with 468 vertices
+    const vertexCount = 468;
+    const positions = new Float32Array(vertexCount * 3);
+
+    return (
+        <mesh ref={meshRef}>
+            <bufferGeometry ref={geometryRef}>
+                <bufferAttribute
+                    attach="attributes-position"
+                    count={vertexCount}
+                    args={[positions, 3]}
+                />
+            </bufferGeometry>
+            <meshStandardMaterial
+                map={texture}
+                transparent
+                side={THREE.DoubleSide}
+                roughness={0.5}
+                metalness={0.2}
+            />
+        </mesh>
+    );
+};
+
 export const FaceLandmarks = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -37,10 +146,10 @@ export const FaceLandmarks = () => {
     const [showVideo, setShowVideo] = useState(true);
     const [showMesh, setShowMesh] = useState(true);
     const [showMask, setShowMask] = useState(false);
+    const resultsRef = useRef<any>(null);
     const [fps, setFps] = useState(0);
     const [resolution, setResolution] = useState('0x0');
     const lastFrameTimeRef = useRef(0);
-    const maskImageRef = useRef<HTMLImageElement | null>(null);
 
     // Ref-based state for the callback loop
     const showVideoRef = useRef(showVideo);
@@ -59,13 +168,10 @@ export const FaceLandmarks = () => {
         showMaskRef.current = showMask;
     }, [showMask]);
 
-    // Load mask image
+    // Load mask image (preload for 3D loader)
     useEffect(() => {
         const img = new Image();
         img.src = '/assets/mask.png';
-        img.onload = () => {
-            maskImageRef.current = img;
-        };
     }, []);
 
     useEffect(() => {
@@ -74,37 +180,11 @@ export const FaceLandmarks = () => {
         let stream: MediaStream | null = null;
         let isMounted = true;
 
-        const calculateFaceTransform = (landmarks: any[], width: number, height: number) => {
-            // Key landmarks for orientation
-            const leftEye = landmarks[33];
-            const rightEye = landmarks[263];
-            const topHead = landmarks[10];
-            const chin = landmarks[152];
-
-            // Center position (midpoint between eyes, slightly lowered for nose bridge)
-            const centerX = ((leftEye.x + rightEye.x) / 2) * width;
-            const centerY = ((leftEye.y + rightEye.y) / 2) * height;
-
-            // Calculate rotation (roll) from eyes
-            const dx = (rightEye.x - leftEye.x) * width;
-            const dy = (rightEye.y - leftEye.y) * height;
-            const angle = Math.atan2(dy, dx);
-
-            // Calculate scale based on face height (chin to top of head)
-            // We use a multiplier to ensure the mask covers the whole head including hair
-            const faceHeight = Math.sqrt(
-                Math.pow((chin.x - topHead.x) * width, 2) +
-                Math.pow((chin.y - topHead.y) * height, 2)
-            );
-
-            // Scale factor - adjusted for the specific mask image aspect ratio
-            const scale = faceHeight * 2.2;
-
-            return { x: centerX, y: centerY, angle, scale };
-        };
-
         const onResults = (results: any) => {
             if (!isMounted) return;
+
+            // Update ref for Three.js
+            resultsRef.current = results;
 
             // Clear error if we are getting results (self-healing)
             setError(null);
@@ -144,34 +224,7 @@ export const FaceLandmarks = () => {
                 canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
             }
 
-            // 2. Draw the Face Mask (Layer 03)
-            if (showMaskRef.current && results.multiFaceLandmarks && maskImageRef.current) {
-                for (const landmarks of results.multiFaceLandmarks) {
-                    const { x, y, angle, scale } = calculateFaceTransform(landmarks, canvasElement.width, canvasElement.height);
-
-                    canvasCtx.save();
-                    canvasCtx.translate(x, y);
-                    canvasCtx.rotate(angle);
-
-                    // Draw image centered and scaled
-                    // The offset (y + scale * 0.1) adjusts the vertical alignment to match the eyes
-                    const aspectRatio = maskImageRef.current.width / maskImageRef.current.height;
-                    const drawWidth = scale * aspectRatio;
-                    const drawHeight = scale;
-
-                    canvasCtx.drawImage(
-                        maskImageRef.current,
-                        -drawWidth / 2,
-                        -drawHeight / 2 + (drawHeight * 0.1), // Slight vertical offset to align eyes
-                        drawWidth,
-                        drawHeight
-                    );
-
-                    canvasCtx.restore();
-                }
-            }
-
-            // 3. Draw the Face Mesh (Layer 02)
+            // 2. Draw the Face Mesh (Layer 02)
             if (showMeshRef.current && results.multiFaceLandmarks) {
                 const global = window as any;
                 for (const landmarks of results.multiFaceLandmarks) {
@@ -179,7 +232,6 @@ export const FaceLandmarks = () => {
                     // Skin/Salmon: #FFC1B6, Chrome/White: #E0E0E0, Green/Matrix: #30FF30 (maybe too matrix-y, stick to brand)
 
                     const connectConfig = { color: '#FFC1B640', lineWidth: 1 }; // Faint skin tone
-                    const landmarkConfig = { color: '#E0E0E0', lineWidth: 1, radius: 1 }; // Chrome points
 
                     // Draw Tessellation (The Mesh)
                     if (global.FACEMESH_TESSELATION) {
@@ -249,6 +301,7 @@ export const FaceLandmarks = () => {
                 faceMesh.setOptions({
                     maxNumFaces: 1,
                     refineLandmarks: true,
+                    enableFaceGeometry: true, // Enable 3D geometry
                     minDetectionConfidence: 0.5,
                     minTrackingConfidence: 0.5,
                 });
@@ -313,11 +366,22 @@ export const FaceLandmarks = () => {
                     playsInline
                 />
 
-                {/* Output Canvas */}
+                {/* Output Canvas (2D) */}
                 <canvas
                     ref={canvasRef}
                     className="absolute inset-0 w-full h-full object-contain"
                 />
+
+                {/* 3D Canvas Layer */}
+                {showMask && (
+                    <div className="absolute inset-0 pointer-events-none">
+                        <Canvas camera={{ position: [0, 0, 1], left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 100 }} orthographic>
+                            <ambientLight intensity={1.5} />
+                            <directionalLight position={[0, 0, 1]} intensity={1} />
+                            <FaceMask3D resultsRef={resultsRef} maskImageSrc="/assets/mask.png" />
+                        </Canvas>
+                    </div>
+                )}
 
                 {/* Loading Overlay */}
                 {isLoading && (
