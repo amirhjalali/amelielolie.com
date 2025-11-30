@@ -5,16 +5,14 @@ import { Canvas } from '@react-three/fiber';
 import { Environment, OrbitControls, PerspectiveCamera, useGLTF, PresentationControls } from '@react-three/drei';
 
 const Avatar = () => {
-    // Placeholder model from Ready Player Me or similar standard GLB
-    // Using a simple box for now if no URL is provided, but the prompt suggested a placeholder URL.
-    // I'll use a common placeholder or a simple mesh if the URL fails, but for now let's try a standard one or just a box as a fallback if I don't have a reliable URL.
-    // Actually, the prompt mentioned "use a placeholder URL for a Ready Player Me GLB".
-    // I will use a sample model URL.
+    const { scene } = useGLTF('https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb');
+
     return (
-        <mesh position={[0, 0, 0]}>
-            <boxGeometry args={[1, 2, 1]} />
-            <meshStandardMaterial color="hotpink" />
-        </mesh>
+        <primitive
+            object={scene}
+            position={[0, -1.5, 0]}
+            scale={1.8}
+        />
     );
 };
 
@@ -51,5 +49,7 @@ export const AvatarCanvas = () => {
         </div>
     );
 };
+
+useGLTF.preload('https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb');
 
 
