@@ -6,6 +6,7 @@ import { DigitalFabric } from '@/components/labs/DigitalFabric';
 import { FluidMirror } from '@/components/labs/FluidMirror';
 import { AvatarCanvas } from '@/components/labs/AvatarCanvas';
 import { TwinPreview } from '@/components/labs/TwinPreview';
+import { FaceLandmarks } from '@/components/labs/FaceLandmarks';
 
 const experiments = [
   {
@@ -23,6 +24,14 @@ const experiments = [
     description:
       'A real-time camera interface that interprets your physical presence into the brand\'s digital aesthetic. Features luminance-based chrome mapping and fluid distortion.',
     Component: FluidMirror,
+  },
+  {
+    key: 'facemesh',
+    title: 'Face Mesh',
+    subtitle: 'Real-time Landmark Detection',
+    description:
+      'Raw neural network visualization overlaying 468 facial landmarks. Analyzes geometry in real-time using MediaPipe inference.',
+    Component: FaceLandmarks,
   },
   {
     key: 'identity',
