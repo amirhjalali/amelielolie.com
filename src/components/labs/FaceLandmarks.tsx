@@ -154,8 +154,18 @@ export const FaceLandmarks = () => {
                 if (!isMounted) return;
 
                 const global = window as any;
+
+                // Retry loop to wait for FaceMesh to be available in global scope
+                // This handles cases where the script tag exists but hasn't fully executed yet
+                let attempts = 0;
+                while (!global.FaceMesh && attempts < 50) { // Wait up to 5 seconds
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    if (!isMounted) return;
+                    attempts++;
+                }
+
                 if (!global.FaceMesh) {
-                    throw new Error('FaceMesh not found in global scope');
+                    throw new Error('FaceMesh not found in global scope after loading script');
                 }
 
                 faceMesh = new global.FaceMesh({
