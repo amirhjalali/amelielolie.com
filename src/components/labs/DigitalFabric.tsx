@@ -186,6 +186,15 @@ const ClothSimulation = () => {
 
       // Gravity
       p.y += GRAVITY * dt * dt;
+
+      // Floor Collision
+      if (p.y < -2.5) {
+        p.y = -2.5;
+        p.oldY = p.y; // Stop velocity
+        // Add some friction on floor
+        p.oldX = p.x - (p.x - p.oldX) * 0.5;
+        p.oldZ = p.z - (p.z - p.oldZ) * 0.5;
+      }
     }
 
     // 2. Interaction (Mouse Drag)
@@ -254,6 +263,13 @@ const ClothSimulation = () => {
           p2.x -= offsetX * 2; p2.y -= offsetY * 2; p2.z -= offsetZ * 2;
         }
       }
+
+      // Floor constraint again during relaxation to prevent pushing through
+      for (let i = 0; i < particles.length; i++) {
+        if (particles[i].y < -2.5) {
+          particles[i].y = -2.5;
+        }
+      }
     }
 
     // 4. Update Geometry
@@ -270,18 +286,26 @@ const ClothSimulation = () => {
   });
 
   return (
-    <mesh ref={meshRef} geometry={geometry} frustumCulled={false}>
-      <meshPhysicalMaterial
-        color="#e0e0e0"
-        roughness={0.4}
-        metalness={0.1}
-        transmission={0.6}
-        thickness={1.5}
-        clearcoat={0.5}
-        side={THREE.DoubleSide}
-        flatShading={false}
-      />
-    </mesh>
+    <group>
+      <mesh ref={meshRef} geometry={geometry} frustumCulled={false}>
+        <meshPhysicalMaterial
+          color="#ffb2b2" // Rose hue
+          roughness={0.4}
+          metalness={0.1}
+          transmission={0.6}
+          thickness={1.5}
+          clearcoat={0.5}
+          side={THREE.DoubleSide}
+          flatShading={false}
+        />
+      </mesh>
+
+      {/* Floor Visual */}
+      <mesh position={[0, -2.51, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#1a1a1a" transparent opacity={0.5} />
+      </mesh>
+    </group>
   );
 };
 
