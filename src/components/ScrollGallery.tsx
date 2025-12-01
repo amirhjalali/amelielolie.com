@@ -184,9 +184,29 @@ export const ScrollGallery = () => {
 
   const imageOffsets = useMemo(() => generateImageOffsets(), []);
 
+  // Fix hydration mismatch by using state for window dimensions
+  const [windowHeight, setWindowHeight] = useState(800);
+  const [windowWidth, setWindowWidth] = useState(1200);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowHeight(window.innerHeight);
+      setWindowWidth(window.innerWidth);
+    };
+
+    // Set initial dimensions
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Distribute images into columns with random assignment
   const columns = useMemo(() => {
-    const numCols = 4;
+    let numCols = 4;
+    if (windowWidth < 640) numCols = 2;
+    else if (windowWidth < 1024) numCols = 3;
+
     const cols: { image: string; offset: typeof imageOffsets[0]; globalIndex: number }[][] =
       Array.from({ length: numCols }, () => []);
 
@@ -196,7 +216,7 @@ export const ScrollGallery = () => {
     });
 
     return cols;
-  }, [imageOffsets]);
+  }, [imageOffsets, windowWidth]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -207,21 +227,6 @@ export const ScrollGallery = () => {
     handleScroll();
 
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Fix hydration mismatch by using state for window height
-  const [windowHeight, setWindowHeight] = useState(800);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowHeight(window.innerHeight);
-    };
-
-    // Set initial height
-    handleResize();
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const closeLightbox = useCallback(() => {
@@ -279,7 +284,7 @@ export const ScrollGallery = () => {
 
       {/* Fixed viewport for gallery */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 flex gap-6 md:gap-10 lg:gap-14 px-6 md:px-10 lg:px-16 pt-24">
+        <div className="absolute inset-0 flex gap-4 md:gap-10 lg:gap-14 px-4 md:px-10 lg:px-16 pt-24">
           {columns.map((column, colIndex) => (
             <div
               key={colIndex}
