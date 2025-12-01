@@ -14,17 +14,26 @@
  * limitations under the License.
  * =============================================================================
  */
-import {MediaPipeFaceMeshMediaPipeEstimationConfig, MediaPipeFaceMeshMediaPipeModelConfig} from './types';
+export interface MediaPipeFaceMeshMediaPipeModelConfig {
+  runtime: 'mediapipe' | 'tfjs';
+  maxFaces?: number;
+  refineLandmarks?: boolean;
+}
+
+export interface MediaPipeFaceMeshMediaPipeEstimationConfig {
+  flipHorizontal?: boolean;
+  staticImageMode?: boolean;
+}
 
 export const DEFAULT_FACE_MESH_MODEL_CONFIG:
-    MediaPipeFaceMeshMediaPipeModelConfig = {
-      runtime: 'mediapipe',
-      maxFaces: 1,
-      refineLandmarks: false
-    };
+  MediaPipeFaceMeshMediaPipeModelConfig = {
+  runtime: 'mediapipe',
+  maxFaces: 1,
+  refineLandmarks: false
+};
 
 export const DEFAULT_FACE_MESH_ESTIMATION_CONFIG:
-    MediaPipeFaceMeshMediaPipeEstimationConfig = {
-      flipHorizontal: false,
-      staticImageMode: false,
-    };
+  MediaPipeFaceMeshMediaPipeEstimationConfig = {
+  flipHorizontal: false,
+  staticImageMode: false,
+};
