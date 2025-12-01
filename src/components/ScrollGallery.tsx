@@ -201,11 +201,14 @@ export const ScrollGallery = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Distribute images into columns with random assignment
+  const isMobile = windowWidth < 640;
+
+  // Distribute images into columns with random assignment (Desktop only)
   const columns = useMemo(() => {
+    if (isMobile) return []; // Don't compute columns for mobile
+
     let numCols = 4;
-    if (windowWidth < 640) numCols = 2;
-    else if (windowWidth < 1024) numCols = 3;
+    if (windowWidth < 1024) numCols = 3;
 
     const cols: { image: string; offset: typeof imageOffsets[0]; globalIndex: number }[][] =
       Array.from({ length: numCols }, () => []);
@@ -216,9 +219,11 @@ export const ScrollGallery = () => {
     });
 
     return cols;
-  }, [imageOffsets, windowWidth]);
+  }, [imageOffsets, windowWidth, isMobile]);
 
   useEffect(() => {
+    if (isMobile) return; // No custom scroll handling needed for mobile
+
     const handleScroll = () => {
       setScrollY(window.scrollY);
     };
@@ -227,7 +232,7 @@ export const ScrollGallery = () => {
     handleScroll();
 
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isMobile]);
 
   const closeLightbox = useCallback(() => {
     setLightboxImage(null);
@@ -265,66 +270,92 @@ export const ScrollGallery = () => {
   const showScrollHint = scrollY < 50;
 
   return (
-    <div ref={containerRef} className="min-h-[1800vh] relative bg-obsidian">
+    <div ref={containerRef} className={`relative bg-obsidian ${isMobile ? 'min-h-screen' : 'min-h-[1800vh]'}`}>
       {/* Lightbox */}
       <Lightbox image={lightboxImage} onClose={closeLightbox} />
 
-      {/* Scroll hint */}
-      <div
-        className="fixed inset-0 z-20 flex items-center justify-center pointer-events-none transition-opacity duration-700"
-        style={{ opacity: showScrollHint ? 1 : 0 }}
-      >
-        <div className="flex flex-col items-center gap-6">
-          <span className="font-mono text-[11px] tracking-[0.4em] text-liquid-chrome/50 uppercase">
-            Scroll to explore
-          </span>
-          <div className="w-px h-20 bg-gradient-to-b from-liquid-chrome/50 to-transparent animate-pulse" />
+      {/* Scroll hint - Desktop only */}
+      {!isMobile && (
+        <div
+          className="fixed inset-0 z-20 flex items-center justify-center pointer-events-none transition-opacity duration-700"
+          style={{ opacity: showScrollHint ? 1 : 0 }}
+        >
+          <div className="flex flex-col items-center gap-6">
+            <span className="font-mono text-[11px] tracking-[0.4em] text-liquid-chrome/50 uppercase">
+              Scroll to explore
+            </span>
+            <div className="w-px h-20 bg-gradient-to-b from-liquid-chrome/50 to-transparent animate-pulse" />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Fixed viewport for gallery */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 flex gap-4 md:gap-10 lg:gap-14 px-4 md:px-10 lg:px-16 pt-24">
-          {columns.map((column, colIndex) => (
+      {/* Mobile Layout: Simple Feed */}
+      {isMobile ? (
+        <div className="flex flex-col gap-8 px-4 py-24">
+          {GALLERY_IMAGES.map((image, index) => (
             <div
-              key={colIndex}
-              className="flex-1 flex flex-col gap-10 md:gap-14 lg:gap-20"
-              style={{ marginTop: `${colIndex * 80}px` }}
+              key={image}
+              className="w-full cursor-pointer"
+              onClick={() => setLightboxImage(image)}
             >
-              {column.map(({ image, offset, globalIndex }) => {
-                const transform = getImageTransform(globalIndex, offset);
-
-                return (
-                  <div
-                    key={image}
-                    className="pointer-events-auto group cursor-pointer"
-                    style={{
-                      marginTop: `${offset.marginTop}px`,
-                      transform: `translateY(${transform.y}px) translateX(${transform.translateX}px) rotate(${transform.rotate}deg)`,
-                      opacity: transform.opacity,
-                      transition: 'opacity 0.3s ease-out',
-                    }}
-                    onClick={() => setLightboxImage(image)}
-                  >
-                    <div className="overflow-hidden rounded-sm">
-                      <Image
-                        src={`/gallery/${image}`}
-                        alt=""
-                        width={600}
-                        height={800}
-                        className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
-                        sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
-                        loading="lazy"
-                        unoptimized
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+              <Image
+                src={`/gallery/${image}`}
+                alt=""
+                width={800}
+                height={1000}
+                className="w-full h-auto rounded-sm"
+                sizes="95vw"
+                loading="lazy"
+                unoptimized
+              />
             </div>
           ))}
         </div>
-      </div>
+      ) : (
+        /* Desktop Layout: Fixed Parallax */
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 flex gap-4 md:gap-10 lg:gap-14 px-4 md:px-10 lg:px-16 pt-24">
+            {columns.map((column, colIndex) => (
+              <div
+                key={colIndex}
+                className="flex-1 flex flex-col gap-10 md:gap-14 lg:gap-20"
+                style={{ marginTop: `${colIndex * 80}px` }}
+              >
+                {column.map(({ image, offset, globalIndex }) => {
+                  const transform = getImageTransform(globalIndex, offset);
+
+                  return (
+                    <div
+                      key={image}
+                      className="pointer-events-auto group cursor-pointer"
+                      style={{
+                        marginTop: `${offset.marginTop}px`,
+                        transform: `translateY(${transform.y}px) translateX(${transform.translateX}px) rotate(${transform.rotate}deg)`,
+                        opacity: transform.opacity,
+                        transition: 'opacity 0.3s ease-out',
+                      }}
+                      onClick={() => setLightboxImage(image)}
+                    >
+                      <div className="overflow-hidden rounded-sm">
+                        <Image
+                          src={`/gallery/${image}`}
+                          alt=""
+                          width={600}
+                          height={800}
+                          className="w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
+                          sizes="(max-width: 1024px) 30vw, 22vw"
+                          loading="lazy"
+                          unoptimized
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
