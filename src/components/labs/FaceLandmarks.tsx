@@ -6,6 +6,62 @@ import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
 import { FaceLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
 
+// Mapping from MediaPipe blendshape names to ARKit/RPM names
+const BLENDSHAPE_MAP: Record<string, string> = {
+    "_neutral": "",
+    "browDownLeft": "browDown_L",
+    "browDownRight": "browDown_R",
+    "browInnerUp": "browInnerUp",
+    "browOuterUpLeft": "browOuterUp_L",
+    "browOuterUpRight": "browOuterUp_R",
+    "cheekPuff": "cheekPuff",
+    "cheekSquintLeft": "cheekSquint_L",
+    "cheekSquintRight": "cheekSquint_R",
+    "eyeBlinkLeft": "eyeBlink_L",
+    "eyeBlinkRight": "eyeBlink_R",
+    "eyeLookDownLeft": "eyeLookDown_L",
+    "eyeLookDownRight": "eyeLookDown_R",
+    "eyeLookInLeft": "eyeLookIn_L",
+    "eyeLookInRight": "eyeLookIn_R",
+    "eyeLookOutLeft": "eyeLookOut_L",
+    "eyeLookOutRight": "eyeLookOut_R",
+    "eyeLookUpLeft": "eyeLookUp_L",
+    "eyeLookUpRight": "eyeLookUp_R",
+    "eyeSquintLeft": "eyeSquint_L",
+    "eyeSquintRight": "eyeSquint_R",
+    "eyeWideLeft": "eyeWide_L",
+    "eyeWideRight": "eyeWide_R",
+    "jawForward": "jawForward",
+    "jawLeft": "jawLeft",
+    "jawOpen": "jawOpen",
+    "jawRight": "jawRight",
+    "mouthClose": "mouthClose",
+    "mouthDimpleLeft": "mouthDimple_L",
+    "mouthDimpleRight": "mouthDimple_R",
+    "mouthFrownLeft": "mouthFrown_L",
+    "mouthFrownRight": "mouthFrown_R",
+    "mouthFunnel": "mouthFunnel",
+    "mouthLeft": "mouthLeft",
+    "mouthLowerDownLeft": "mouthLowerDown_L",
+    "mouthLowerDownRight": "mouthLowerDown_R",
+    "mouthPressLeft": "mouthPress_L",
+    "mouthPressRight": "mouthPress_R",
+    "mouthPucker": "mouthPucker",
+    "mouthRight": "mouthRight",
+    "mouthRollLower": "mouthRollLower",
+    "mouthRollUpper": "mouthRollUpper",
+    "mouthShrugLower": "mouthShrugLower",
+    "mouthShrugUpper": "mouthShrugUpper",
+    "mouthSmileLeft": "mouthSmile_L",
+    "mouthSmileRight": "mouthSmile_R",
+    "mouthStretchLeft": "mouthStretch_L",
+    "mouthStretchRight": "mouthStretch_R",
+    "mouthUpperUpLeft": "mouthUpperUp_L",
+    "mouthUpperUpRight": "mouthUpperUp_R",
+    "noseSneerLeft": "noseSneer_L",
+    "noseSneerRight": "noseSneer_R",
+};
+
 // --- Avatar Component ---
 const AvatarMask = ({
     blendshapes,
@@ -22,28 +78,17 @@ const AvatarMask = ({
 }) => {
     const { scene } = useGLTF(url);
     const groupRef = useRef<THREE.Group>(null);
-    const headMeshRef = useRef<THREE.Mesh | null>(null);
 
     // Setup: Find head mesh and hide body
     useEffect(() => {
         if (scene) {
             scene.traverse((child: any) => {
                 if (child.isMesh) {
-                    // Log morph targets for debugging
-                    if (child.morphTargetDictionary) {
-                        console.log(`Mesh: ${child.name}, MorphTargets:`, Object.keys(child.morphTargetDictionary));
-                    }
-
-                    // RPM usually has 'Wolf3D_Head', 'Wolf3D_Teeth', etc.
                     // Hide body parts
                     if (child.name.includes('Body') || child.name.includes('Outfit') || child.name.includes('Top') || child.name.includes('Bottom') || child.name.includes('Footwear')) {
                         child.visible = false;
                     }
 
-                    // Identify head mesh for morph targets
-                    // Usually 'Wolf3D_Head' or similar has the main blendshapes
-                    // But often they are distributed (Head, Teeth, Beard, etc.)
-                    // We need to apply to ALL meshes that have morphTargetDictionary
                     child.castShadow = true;
                     child.receiveShadow = true;
                 }
@@ -69,19 +114,23 @@ const AvatarMask = ({
             scene.traverse((child: any) => {
                 if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
                     for (const shape of blendshapes) {
-                        const name = shape.categoryName;
+                        const mpName = shape.categoryName;
                         const score = shape.score;
 
-                        // Try exact match
-                        let index = child.morphTargetDictionary[name];
+                        // 1. Try explicit mapping
+                        let targetName = BLENDSHAPE_MAP[mpName];
+                        let index = targetName ? child.morphTargetDictionary[targetName] : undefined;
 
-                        // Try ARKit naming (Left -> _L, Right -> _R)
+                        // 2. Fallback: Try exact match
                         if (index === undefined) {
-                            const arKitName = name.replace('Left', '_L').replace('Right', '_R');
-                            index = child.morphTargetDictionary[arKitName];
+                            index = child.morphTargetDictionary[mpName];
                         }
 
-                        // Try lowercase/uppercase variations if needed (optional)
+                        // 3. Fallback: Try ARKit naming convention (Left -> _L)
+                        if (index === undefined) {
+                            targetName = mpName.replace('Left', '_L').replace('Right', '_R');
+                            index = child.morphTargetDictionary[targetName];
+                        }
 
                         if (index !== undefined) {
                             child.morphTargetInfluences[index] = score;
@@ -103,27 +152,6 @@ const AvatarMask = ({
     );
 };
 
-// --- Face Mask Component (Legacy Texture) ---
-// Simplified for new API
-const FaceMask3D = ({
-    landmarks,
-    maskImageSrc
-}: {
-    landmarks: any,
-    maskImageSrc: string
-}) => {
-    // Note: Implementing full UV mapping for the new API requires re-mapping the landmarks
-    // For now, we will disable this or implement a simple version if needed.
-    // The user prioritized the Avatar, so we focus on that.
-    // We can leave a placeholder or try to adapt the old logic.
-    // Given the complexity of re-implementing the custom geometry with the new landmarks format,
-    // and the user's focus on the Avatar, I will omit the texture mask for this iteration 
-    // or implement a basic version if requested.
-    // Let's keep it simple and focus on the Avatar as requested.
-    return null;
-};
-
-
 export const FaceLandmarks = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -133,7 +161,15 @@ export const FaceLandmarks = () => {
     // UI State
     const [showVideo, setShowVideo] = useState(true);
     const [activeAvatar, setActiveAvatar] = useState<string | null>(null);
-    const [showDebug, setShowDebug] = useState(true); // Replaces showMesh for drawing utils
+    const [showDebug, setShowDebug] = useState(true);
+
+    // Refs for Animation Loop (Fixes Stale Closure)
+    const showVideoRef = useRef(showVideo);
+    const showDebugRef = useRef(showDebug);
+
+    // Update refs when state changes
+    useEffect(() => { showVideoRef.current = showVideo; }, [showVideo]);
+    useEffect(() => { showDebugRef.current = showDebug; }, [showDebug]);
 
     // Data State
     const [faceMatrix, setFaceMatrix] = useState<THREE.Matrix4 | null>(null);
@@ -215,11 +251,13 @@ export const FaceLandmarks = () => {
                         canvas.height = video.videoHeight;
                     }
 
-                    if (showVideo) {
+                    // Use Ref for current state
+                    if (showVideoRef.current) {
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     }
 
-                    if (showDebug && results.faceLandmarks) {
+                    // Use Ref for current state
+                    if (showDebugRef.current && results.faceLandmarks) {
                         const drawingUtils = new DrawingUtils(ctx);
                         for (const landmarks of results.faceLandmarks) {
                             drawingUtils.drawConnectors(
@@ -295,10 +333,6 @@ export const FaceLandmarks = () => {
                 {activeAvatar && (
                     <div className="absolute inset-0 pointer-events-none">
                         <Canvas camera={{ fov: 63, position: [0, 0, 0] }}>
-                            {/* Note: MediaPipe Matrix assumes a specific camera setup.
-                                Usually FOV ~63 deg (vertical) for 16:9, or matching the input video.
-                                The matrix is in world space relative to the camera at origin.
-                            */}
                             <ambientLight intensity={1.5} />
                             <directionalLight position={[0, 0, 1]} intensity={1} />
                             <Suspense fallback={null}>
@@ -309,8 +343,9 @@ export const FaceLandmarks = () => {
                                         ? 'https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb'
                                         : '/assets/amir.glb'
                                     }
-                                    scale={activeAvatar === 'default' ? 80 : 100}
-                                    position={activeAvatar === 'default' ? [0, -120, 0] : [0, -170, 0]}
+                                    // Updated default avatar settings to match custom avatar
+                                    scale={activeAvatar === 'default' ? 100 : 100}
+                                    position={activeAvatar === 'default' ? [0, -170, 0] : [0, -170, 0]}
                                 />
                             </Suspense>
                         </Canvas>
