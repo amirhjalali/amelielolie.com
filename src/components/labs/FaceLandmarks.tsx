@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useGLTF } from '@react-three/drei';
 import { TRIANGULATION, UVS } from '@/utils/triangulation';
 
 
@@ -116,6 +117,95 @@ const FaceMask3D = ({
     );
 };
 
+const AvatarMask = ({
+    resultsRef,
+    avatarUrl
+}: {
+    resultsRef: React.MutableRefObject<any>,
+    avatarUrl: string
+}) => {
+    const { scene } = useGLTF(avatarUrl);
+    const groupRef = useRef<THREE.Group>(null);
+
+    // Hide body parts, keep only head/neck if possible
+    useEffect(() => {
+        if (scene) {
+            scene.traverse((child: any) => {
+                if (child.isMesh) {
+                    // RPM usually has 'Wolf3D_Head', 'Wolf3D_Teeth', etc.
+                    // We might want to hide 'Wolf3D_Body', 'Wolf3D_Outfit_...'
+                    if (child.name.includes('Body') || child.name.includes('Outfit') || child.name.includes('Top') || child.name.includes('Bottom') || child.name.includes('Footwear')) {
+                        child.visible = false;
+                    }
+                }
+            });
+        }
+    }, [scene]);
+
+    useFrame(() => {
+        const group = groupRef.current;
+        const results = resultsRef.current;
+
+        if (!group || !results || !results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+            if (group) group.visible = false;
+            return;
+        }
+
+        group.visible = true;
+        const landmarks = results.multiFaceLandmarks[0];
+
+        // Key landmarks
+        const nose = landmarks[1];
+        const leftEye = landmarks[33];
+        const rightEye = landmarks[263];
+        const chin = landmarks[152];
+
+        if (!nose || !leftEye || !rightEye || !chin) return;
+
+        const toThree = (lm: any) => new THREE.Vector3(
+            (lm.x * 2) - 1,
+            -(lm.y * 2) + 1,
+            -lm.z
+        );
+
+        const vNose = toThree(nose);
+        const vLeftEye = toThree(leftEye);
+        const vRightEye = toThree(rightEye);
+        const vChin = toThree(chin);
+
+        // Position: Centroid of the face
+        const position = vNose.clone().add(vChin).multiplyScalar(0.5);
+
+        // Scale estimation: Distance between eyes
+        const eyeDist = vLeftEye.distanceTo(vRightEye);
+        // Heuristic scale factor
+        const baseScale = eyeDist * 6.5;
+
+        group.position.copy(position);
+        group.scale.setScalar(baseScale);
+
+        // Rotation
+        const xAxis = new THREE.Vector3().subVectors(vRightEye, vLeftEye).normalize();
+        const yAxis = new THREE.Vector3().subVectors(vNose, vChin).normalize();
+        const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
+        yAxis.crossVectors(zAxis, xAxis).normalize();
+
+        const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+        group.setRotationFromMatrix(rotationMatrix);
+
+        // Adjustments: RPM avatars face +Z usually? Or -Z?
+        // We might need to rotate the group locally if it's facing the wrong way.
+        // Let's assume standard orientation for now.
+    });
+
+    return (
+        <primitive
+            ref={groupRef}
+            object={scene}
+        />
+    );
+};
+
 export const FaceLandmarks = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -124,6 +214,7 @@ export const FaceLandmarks = () => {
     const [showVideo, setShowVideo] = useState(true);
     const [showMesh, setShowMesh] = useState(true);
     const [showMask, setShowMask] = useState(false);
+    const [showAvatar, setShowAvatar] = useState(false);
     const resultsRef = useRef<any>(null);
     const [fps, setFps] = useState(0);
     const [resolution, setResolution] = useState('0x0');
@@ -133,6 +224,7 @@ export const FaceLandmarks = () => {
     const showVideoRef = useRef(showVideo);
     const showMeshRef = useRef(showMesh);
     const showMaskRef = useRef(showMask);
+    const showAvatarRef = useRef(showAvatar);
 
     useEffect(() => {
         showVideoRef.current = showVideo;
@@ -145,6 +237,10 @@ export const FaceLandmarks = () => {
     useEffect(() => {
         showMaskRef.current = showMask;
     }, [showMask]);
+
+    useEffect(() => {
+        showAvatarRef.current = showAvatar;
+    }, [showAvatar]);
 
     // Load mask image (preload for 3D loader)
     useEffect(() => {
@@ -360,6 +456,16 @@ export const FaceLandmarks = () => {
                     </div>
                 )}
 
+                {showAvatar && (
+                    <div className="absolute inset-0 pointer-events-none">
+                        <Canvas camera={{ position: [0, 0, 1], left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 100 }} orthographic>
+                            <ambientLight intensity={1.5} />
+                            <directionalLight position={[0, 0, 1]} intensity={1} />
+                            <AvatarMask resultsRef={resultsRef} avatarUrl="https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb" />
+                        </Canvas>
+                    </div>
+                )}
+
                 {/* Loading Overlay */}
                 {isLoading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-10 transition-opacity duration-500">
@@ -414,12 +520,23 @@ export const FaceLandmarks = () => {
 
                 <button
                     onClick={() => setShowMask(!showMask)}
-                    className={`p-4 rounded-xl border transition-all duration-300 text-left group md:col-span-2 ${showMask ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showMask ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
                         }`}
                 >
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 03</div>
                     <div className={`font-sans text-sm ${showMask ? 'text-skin' : 'text-liquid-chrome'}`}>
                         {showMask ? 'Mask Overlay Active' : 'Mask Overlay Disabled'}
+                    </div>
+                </button>
+
+                <button
+                    onClick={() => setShowAvatar(!showAvatar)}
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showAvatar ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
+                        }`}
+                >
+                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 04</div>
+                    <div className={`font-sans text-sm ${showAvatar ? 'text-skin' : 'text-liquid-chrome'}`}>
+                        {showAvatar ? 'Avatar Overlay Active' : 'Avatar Overlay Disabled'}
                     </div>
                 </button>
             </div>
