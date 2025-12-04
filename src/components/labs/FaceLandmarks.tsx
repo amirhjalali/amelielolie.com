@@ -127,6 +127,10 @@ const AvatarMask = ({
     const { scene } = useGLTF(avatarUrl);
     const groupRef = useRef<THREE.Group>(null);
 
+    useEffect(() => {
+        console.log('AvatarMask: Mounted, scene loaded:', !!scene);
+    }, [scene]);
+
     // Hide body parts, keep only head/neck if possible
     useEffect(() => {
         if (scene) {
@@ -181,7 +185,11 @@ const AvatarMask = ({
         // Heuristic scale factor
         const baseScale = eyeDist * 6.5;
 
-        group.position.copy(position);
+        // Offset for RPM avatar (pivot at feet, head at ~1.5m)
+        // We need to move the model down so the head aligns with the face position
+        const yOffset = new THREE.Vector3(0, -1.5 * baseScale, 0);
+
+        group.position.copy(position).add(yOffset);
         group.scale.setScalar(baseScale);
 
         // Rotation
@@ -461,7 +469,9 @@ export const FaceLandmarks = () => {
                         <Canvas camera={{ position: [0, 0, 1], left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 100 }} orthographic>
                             <ambientLight intensity={1.5} />
                             <directionalLight position={[0, 0, 1]} intensity={1} />
-                            <AvatarMask resultsRef={resultsRef} avatarUrl="https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb" />
+                            <React.Suspense fallback={null}>
+                                <AvatarMask resultsRef={resultsRef} avatarUrl="https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb" />
+                            </React.Suspense>
                         </Canvas>
                     </div>
                 )}
