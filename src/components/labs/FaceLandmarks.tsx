@@ -77,12 +77,13 @@ const AvatarMask = ({
     });
 
     return (
-        <primitive
-            ref={groupRef}
-            object={scene}
-            scale={60}
-            position={[0, -90, 0]}
-        />
+        <group ref={groupRef}>
+            <primitive
+                object={scene}
+                scale={100}
+                position={[0, -170, 0]}
+            />
+        </group>
     );
 };
 
