@@ -10,11 +10,15 @@ import { FaceLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-
 const AvatarMask = ({
     blendshapes,
     matrix,
-    url
+    url,
+    scale = 100,
+    position = [0, -170, 0]
 }: {
     blendshapes: any[],
     matrix: THREE.Matrix4 | null,
-    url: string
+    url: string,
+    scale?: number,
+    position?: [number, number, number]
 }) => {
     const { scene } = useGLTF(url);
     const groupRef = useRef<THREE.Group>(null);
@@ -25,6 +29,11 @@ const AvatarMask = ({
         if (scene) {
             scene.traverse((child: any) => {
                 if (child.isMesh) {
+                    // Log morph targets for debugging
+                    if (child.morphTargetDictionary) {
+                        console.log(`Mesh: ${child.name}, MorphTargets:`, Object.keys(child.morphTargetDictionary));
+                    }
+
                     // RPM usually has 'Wolf3D_Head', 'Wolf3D_Teeth', etc.
                     // Hide body parts
                     if (child.name.includes('Body') || child.name.includes('Outfit') || child.name.includes('Top') || child.name.includes('Bottom') || child.name.includes('Footwear')) {
@@ -63,10 +72,17 @@ const AvatarMask = ({
                         const name = shape.categoryName;
                         const score = shape.score;
 
-                        // RPM uses ARKit naming convention usually
-                        // MediaPipe uses similar naming
-                        // We try to match directly
-                        const index = child.morphTargetDictionary[name];
+                        // Try exact match
+                        let index = child.morphTargetDictionary[name];
+
+                        // Try ARKit naming (Left -> _L, Right -> _R)
+                        if (index === undefined) {
+                            const arKitName = name.replace('Left', '_L').replace('Right', '_R');
+                            index = child.morphTargetDictionary[arKitName];
+                        }
+
+                        // Try lowercase/uppercase variations if needed (optional)
+
                         if (index !== undefined) {
                             child.morphTargetInfluences[index] = score;
                         }
@@ -80,8 +96,8 @@ const AvatarMask = ({
         <group ref={groupRef}>
             <primitive
                 object={scene}
-                scale={100}
-                position={[0, -170, 0]}
+                scale={scale}
+                position={position}
             />
         </group>
     );
@@ -293,6 +309,8 @@ export const FaceLandmarks = () => {
                                         ? 'https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb'
                                         : '/assets/amir.glb'
                                     }
+                                    scale={activeAvatar === 'default' ? 80 : 100}
+                                    position={activeAvatar === 'default' ? [0, -120, 0] : [0, -170, 0]}
                                 />
                             </Suspense>
                         </Canvas>
