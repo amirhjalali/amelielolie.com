@@ -149,7 +149,7 @@ export const FaceLandmarks = () => {
     // Load mask image (preload for 3D loader)
     useEffect(() => {
         const img = new Image();
-        img.src = '/assets/mask.png';
+        img.src = '/assets/face_texture_uv.png';
     }, []);
 
     useEffect(() => {
@@ -355,7 +355,7 @@ export const FaceLandmarks = () => {
                         <Canvas camera={{ position: [0, 0, 1], left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 100 }} orthographic>
                             <ambientLight intensity={1.5} />
                             <directionalLight position={[0, 0, 1]} intensity={1} />
-                            <FaceMask3D resultsRef={resultsRef} maskImageSrc="/assets/mask.png" />
+                            <FaceMask3D resultsRef={resultsRef} maskImageSrc="/assets/face_texture_uv.png" />
                         </Canvas>
                     </div>
                 )}
