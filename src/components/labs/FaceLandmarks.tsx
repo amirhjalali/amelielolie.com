@@ -80,6 +80,8 @@ const AvatarMask = ({
         <primitive
             ref={groupRef}
             object={scene}
+            scale={60}
+            position={[0, -90, 0]}
         />
     );
 };
