@@ -1,146 +1,42 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
+import React, { useEffect, useRef, useState, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGLTF } from '@react-three/drei';
-import { TRIANGULATION, UVS } from '@/utils/triangulation';
+import { FaceLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
 
-
-// Local implementation of drawConnectors to avoid import issues with @mediapipe/drawing_utils
-const drawConnectors = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    connections: any[],
-    style: { color: string; lineWidth: number }
-) => {
-    const canvas = ctx.canvas;
-    ctx.save();
-    ctx.strokeStyle = style.color;
-    ctx.lineWidth = style.lineWidth;
-
-    for (const connection of connections) {
-        const start = landmarks[connection[0]];
-        const end = landmarks[connection[1]];
-        if (start && end) {
-            ctx.beginPath();
-            ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
-            ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
-            ctx.stroke();
-        }
-    }
-    ctx.restore();
-};
-
-const FaceMask3D = ({
-    resultsRef,
-    maskImageSrc
-}: {
-    resultsRef: React.MutableRefObject<any>,
-    maskImageSrc: string
-}) => {
-    const meshRef = useRef<THREE.Mesh>(null);
-    const geometryRef = useRef<THREE.BufferGeometry>(null);
-    const texture = useLoader(THREE.TextureLoader, maskImageSrc);
-    const initializedRef = useRef(false);
-
-    useFrame(() => {
-        const mesh = meshRef.current;
-        const geometry = geometryRef.current;
-        const results = resultsRef.current;
-
-        if (!mesh || !geometry || !results || !results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-            return;
-        }
-
-        const landmarks = results.multiFaceLandmarks[0];
-
-        // Initialize Geometry (Indices & UVs) once
-        if (!initializedRef.current) {
-            // Set Indices from static triangulation
-            geometry.setIndex(TRIANGULATION);
-
-            // Set UVs from static canonical model
-            const uvs = new Float32Array(UVS);
-            geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-
-            initializedRef.current = true;
-        }
-
-        // Update Vertices (Positions) every frame
-        if (initializedRef.current) {
-            const count = landmarks.length;
-            const positions = geometry.attributes.position.array as Float32Array;
-
-            for (let i = 0; i < count; i++) {
-                // Map normalized (0-1) to Three.js coordinates
-                // MediaPipe: x: 0(left)->1(right), y: 0(top)->1(bottom)
-                // Three.js: x: -1(left)->1(right), y: -1(bottom)->1(top)
-
-                const x = (landmarks[i].x * 2) - 1;
-                const y = -(landmarks[i].y * 2) + 1;
-                const z = -landmarks[i].z; // Depth (might need scaling)
-
-                positions[i * 3] = x;
-                positions[i * 3 + 1] = y;
-                positions[i * 3 + 2] = z;
-            }
-
-            geometry.attributes.position.needsUpdate = true;
-
-            // Recalculate normals for lighting
-            geometry.computeVertexNormals();
-        }
-    });
-
-    // Create a placeholder geometry with 468 vertices
-    const vertexCount = 468;
-    const positions = new Float32Array(vertexCount * 3);
-
-    return (
-        <mesh ref={meshRef}>
-            <bufferGeometry ref={geometryRef}>
-                <bufferAttribute
-                    attach="attributes-position"
-                    count={vertexCount}
-                    args={[positions, 3]}
-                />
-            </bufferGeometry>
-            <meshStandardMaterial
-                map={texture}
-                transparent
-                side={THREE.DoubleSide}
-                roughness={0.5}
-                metalness={0.2}
-            />
-        </mesh>
-    );
-};
-
+// --- Avatar Component ---
 const AvatarMask = ({
-    resultsRef,
-    avatarUrl
+    blendshapes,
+    matrix,
+    url
 }: {
-    resultsRef: React.MutableRefObject<any>,
-    avatarUrl: string
+    blendshapes: any[],
+    matrix: THREE.Matrix4 | null,
+    url: string
 }) => {
-    const { scene } = useGLTF(avatarUrl);
+    const { scene } = useGLTF(url);
     const groupRef = useRef<THREE.Group>(null);
+    const headMeshRef = useRef<THREE.Mesh | null>(null);
 
-    useEffect(() => {
-        console.log('AvatarMask: Mounted, scene loaded:', !!scene);
-    }, [scene]);
-
-    // Hide body parts, keep only head/neck if possible
+    // Setup: Find head mesh and hide body
     useEffect(() => {
         if (scene) {
             scene.traverse((child: any) => {
                 if (child.isMesh) {
                     // RPM usually has 'Wolf3D_Head', 'Wolf3D_Teeth', etc.
-                    // We might want to hide 'Wolf3D_Body', 'Wolf3D_Outfit_...'
+                    // Hide body parts
                     if (child.name.includes('Body') || child.name.includes('Outfit') || child.name.includes('Top') || child.name.includes('Bottom') || child.name.includes('Footwear')) {
                         child.visible = false;
                     }
+
+                    // Identify head mesh for morph targets
+                    // Usually 'Wolf3D_Head' or similar has the main blendshapes
+                    // But often they are distributed (Head, Teeth, Beard, etc.)
+                    // We need to apply to ALL meshes that have morphTargetDictionary
+                    child.castShadow = true;
+                    child.receiveShadow = true;
                 }
             });
         }
@@ -148,62 +44,36 @@ const AvatarMask = ({
 
     useFrame(() => {
         const group = groupRef.current;
-        const results = resultsRef.current;
+        if (!group) return;
 
-        if (!group || !results || !results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-            if (group) group.visible = false;
-            return;
+        // 1. Apply Pose
+        if (matrix) {
+            group.matrixAutoUpdate = false;
+            group.matrix.copy(matrix);
+            group.visible = true;
+        } else {
+            group.visible = false;
         }
 
-        group.visible = true;
-        const landmarks = results.multiFaceLandmarks[0];
+        // 2. Apply Blendshapes
+        if (blendshapes && blendshapes.length > 0) {
+            scene.traverse((child: any) => {
+                if (child.isMesh && child.morphTargetDictionary && child.morphTargetInfluences) {
+                    for (const shape of blendshapes) {
+                        const name = shape.categoryName;
+                        const score = shape.score;
 
-        // Key landmarks
-        const nose = landmarks[1];
-        const leftEye = landmarks[33];
-        const rightEye = landmarks[263];
-        const chin = landmarks[152];
-
-        if (!nose || !leftEye || !rightEye || !chin) return;
-
-        const toThree = (lm: any) => new THREE.Vector3(
-            (lm.x * 2) - 1,
-            -(lm.y * 2) + 1,
-            -lm.z
-        );
-
-        const vNose = toThree(nose);
-        const vLeftEye = toThree(leftEye);
-        const vRightEye = toThree(rightEye);
-        const vChin = toThree(chin);
-
-        // Position: Centroid of the face
-        const position = vNose.clone().add(vChin).multiplyScalar(0.5);
-
-        // Scale estimation: Distance between eyes
-        const eyeDist = vLeftEye.distanceTo(vRightEye);
-        // Heuristic scale factor
-        const baseScale = eyeDist * 6.5;
-
-        // Offset for RPM avatar (pivot at feet, head at ~1.5m)
-        // We need to move the model down so the head aligns with the face position
-        const yOffset = new THREE.Vector3(0, -1.5 * baseScale, 0);
-
-        group.position.copy(position).add(yOffset);
-        group.scale.setScalar(baseScale);
-
-        // Rotation
-        const xAxis = new THREE.Vector3().subVectors(vRightEye, vLeftEye).normalize();
-        const yAxis = new THREE.Vector3().subVectors(vNose, vChin).normalize();
-        const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
-        yAxis.crossVectors(zAxis, xAxis).normalize();
-
-        const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-        group.setRotationFromMatrix(rotationMatrix);
-
-        // Adjustments: RPM avatars face +Z usually? Or -Z?
-        // We might need to rotate the group locally if it's facing the wrong way.
-        // Let's assume standard orientation for now.
+                        // RPM uses ARKit naming convention usually
+                        // MediaPipe uses similar naming
+                        // We try to match directly
+                        const index = child.morphTargetDictionary[name];
+                        if (index !== undefined) {
+                            child.morphTargetInfluences[index] = score;
+                        }
+                    }
+                }
+            });
+        }
     });
 
     return (
@@ -214,302 +84,236 @@ const AvatarMask = ({
     );
 };
 
+// --- Face Mask Component (Legacy Texture) ---
+// Simplified for new API
+const FaceMask3D = ({
+    landmarks,
+    maskImageSrc
+}: {
+    landmarks: any,
+    maskImageSrc: string
+}) => {
+    // Note: Implementing full UV mapping for the new API requires re-mapping the landmarks
+    // For now, we will disable this or implement a simple version if needed.
+    // The user prioritized the Avatar, so we focus on that.
+    // We can leave a placeholder or try to adapt the old logic.
+    // Given the complexity of re-implementing the custom geometry with the new landmarks format,
+    // and the user's focus on the Avatar, I will omit the texture mask for this iteration 
+    // or implement a basic version if requested.
+    // Let's keep it simple and focus on the Avatar as requested.
+    return null;
+};
+
+
 export const FaceLandmarks = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // UI State
     const [showVideo, setShowVideo] = useState(true);
-    const [showMesh, setShowMesh] = useState(true);
-    const [showMask, setShowMask] = useState(false);
-    const [showAvatar, setShowAvatar] = useState(false);
-    const resultsRef = useRef<any>(null);
-    const [fps, setFps] = useState(0);
-    const [resolution, setResolution] = useState('0x0');
-    const lastFrameTimeRef = useRef(0);
+    const [activeAvatar, setActiveAvatar] = useState<string | null>(null);
+    const [showDebug, setShowDebug] = useState(true); // Replaces showMesh for drawing utils
 
-    // Ref-based state for the callback loop
-    const showVideoRef = useRef(showVideo);
-    const showMeshRef = useRef(showMesh);
-    const showMaskRef = useRef(showMask);
-    const showAvatarRef = useRef(showAvatar);
+    // Data State
+    const [faceMatrix, setFaceMatrix] = useState<THREE.Matrix4 | null>(null);
+    const [blendshapes, setBlendshapes] = useState<any[]>([]);
+
+    const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+    const lastVideoTimeRef = useRef(-1);
+    const requestRef = useRef<number>(0);
 
     useEffect(() => {
-        showVideoRef.current = showVideo;
-    }, [showVideo]);
-
-    useEffect(() => {
-        showMeshRef.current = showMesh;
-    }, [showMesh]);
-
-    useEffect(() => {
-        showMaskRef.current = showMask;
-    }, [showMask]);
-
-    useEffect(() => {
-        showAvatarRef.current = showAvatar;
-    }, [showAvatar]);
-
-    // Load mask image (preload for 3D loader)
-    useEffect(() => {
-        const img = new Image();
-        img.src = '/assets/face_texture_uv.png';
-    }, []);
-
-    useEffect(() => {
-        let faceMesh: any = null;
-        let animationFrameId: number;
-        let stream: MediaStream | null = null;
-        let isMounted = true;
-
-        const onResults = (results: any) => {
-            if (!isMounted) return;
-
-            // Update ref for Three.js
-            resultsRef.current = results;
-
-            // Clear error if we are getting results (self-healing)
-            setError(null);
-
-            // Calculate FPS
-            const now = performance.now();
-            const delta = now - lastFrameTimeRef.current;
-            if (delta >= 1000 / 10) { // Update roughly every 10 frames or so for stability
-                setFps(Math.round(1000 / delta));
-                lastFrameTimeRef.current = now;
-            }
-
-            const canvasElement = canvasRef.current;
-            const canvasCtx = canvasElement?.getContext('2d');
-
-            if (!canvasElement || !canvasCtx) return;
-
-            // Resize canvas to match video dimensions
-            if (results.image.width && results.image.height) {
-                if (canvasElement.width !== results.image.width || canvasElement.height !== results.image.height) {
-                    canvasElement.width = results.image.width;
-                    canvasElement.height = results.image.height;
-                    setResolution(`${results.image.width}x${results.image.height}`);
-                }
-            }
-
-            setIsLoading(false);
-
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-            // 1. Draw the video frame
-            if (showVideoRef.current) {
-                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            } else {
-                canvasCtx.fillStyle = '#050505'; // Void black
-                canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
-            }
-
-            // 2. Draw the Face Mesh (Layer 02)
-            if (showMeshRef.current && results.multiFaceLandmarks) {
-                const global = window as any;
-                for (const landmarks of results.multiFaceLandmarks) {
-                    // Config for drawing - Amelie Lolie Aesthetic
-                    // Skin/Salmon: #FFC1B6, Chrome/White: #E0E0E0, Green/Matrix: #30FF30 (maybe too matrix-y, stick to brand)
-
-                    const connectConfig = { color: '#FFC1B640', lineWidth: 1 }; // Faint skin tone
-
-                    // Draw Tessellation (The Mesh)
-                    if (global.FACEMESH_TESSELATION) {
-                        drawConnectors(canvasCtx, landmarks, global.FACEMESH_TESSELATION, connectConfig);
-                    }
-
-                    // Draw Eyes - Sharp Chrome
-                    if (global.FACEMESH_RIGHT_EYE) drawConnectors(canvasCtx, landmarks, global.FACEMESH_RIGHT_EYE, { color: '#E0E0E0', lineWidth: 2 });
-                    if (global.FACEMESH_RIGHT_EYEBROW) drawConnectors(canvasCtx, landmarks, global.FACEMESH_RIGHT_EYEBROW, { color: '#E0E0E0', lineWidth: 2 });
-                    if (global.FACEMESH_LEFT_EYE) drawConnectors(canvasCtx, landmarks, global.FACEMESH_LEFT_EYE, { color: '#E0E0E0', lineWidth: 2 });
-                    if (global.FACEMESH_LEFT_EYEBROW) drawConnectors(canvasCtx, landmarks, global.FACEMESH_LEFT_EYEBROW, { color: '#E0E0E0', lineWidth: 2 });
-
-                    // Draw Face Oval - Subtle boundary
-                    if (global.FACEMESH_FACE_OVAL) drawConnectors(canvasCtx, landmarks, global.FACEMESH_FACE_OVAL, { color: '#FFC1B680', lineWidth: 1 });
-
-                    // Draw Lips - Highlight
-                    if (global.FACEMESH_LIPS) drawConnectors(canvasCtx, landmarks, global.FACEMESH_LIPS, { color: '#FFC1B6', lineWidth: 2 });
-                }
-            }
-            canvasCtx.restore();
-        };
-
-        const loadScript = (src: string): Promise<void> => {
-            return new Promise((resolve, reject) => {
-                if (document.querySelector(`script[src="${src}"]`)) {
-                    resolve();
-                    return;
-                }
-                const script = document.createElement('script');
-                script.src = src;
-                script.crossOrigin = 'anonymous';
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-                document.body.appendChild(script);
-            });
-        };
-
         const init = async () => {
-            if (!videoRef.current) return;
-
             try {
-                await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+                const filesetResolver = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+                );
 
-                if (!isMounted) return;
-
-                const global = window as any;
-
-                // Retry loop to wait for FaceMesh to be available in global scope
-                // This handles cases where the script tag exists but hasn't fully executed yet
-                let attempts = 0;
-                while (!global.FaceMesh && attempts < 50) { // Wait up to 5 seconds
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    if (!isMounted) return;
-                    attempts++;
-                }
-
-                if (!global.FaceMesh) {
-                    throw new Error('FaceMesh not found in global scope after loading script');
-                }
-
-                faceMesh = new global.FaceMesh({
-                    locateFile: (file: string) => {
-                        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                faceLandmarkerRef.current = await FaceLandmarker.createFromOptions(filesetResolver, {
+                    baseOptions: {
+                        modelAssetPath: "/models/face_landmarker.task",
+                        delegate: "GPU"
                     },
+                    outputFaceBlendshapes: true,
+                    outputFacialTransformationMatrixes: true,
+                    runningMode: "VIDEO",
+                    numFaces: 1
                 });
 
-                faceMesh.setOptions({
-                    maxNumFaces: 1,
-                    refineLandmarks: true,
-                    minDetectionConfidence: 0.5,
-                    minTrackingConfidence: 0.5,
+                // Camera Setup
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720, facingMode: "user" }
                 });
-
-                faceMesh.onResults(onResults);
-
-                // Initialize Camera manually
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720, facingMode: 'user' }
-                });
-
-                if (!isMounted) {
-                    stream.getTracks().forEach(track => track.stop());
-                    return;
-                }
 
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    await videoRef.current.play();
-
-                    // Start processing loop
-                    const processFrame = async () => {
-                        if (!isMounted) return;
-                        if (faceMesh && videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
-                            await faceMesh.send({ image: videoRef.current });
-                        }
-                        animationFrameId = requestAnimationFrame(processFrame);
-                    };
-                    processFrame();
+                    videoRef.current.addEventListener("loadeddata", predictWebcam);
                 }
+
+                setIsLoading(false);
 
             } catch (err) {
-                if (isMounted) {
-                    console.error('Error initializing FaceMesh:', err);
-                    setError('Failed to access camera or initialize models.');
-                    setIsLoading(false);
-                }
+                console.error(err);
+                setError("Failed to initialize Face Landmarker");
+                setIsLoading(false);
             }
         };
 
         init();
 
         return () => {
-            isMounted = false;
-            cancelAnimationFrame(animationFrameId);
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            if (faceMesh) {
-                faceMesh.close();
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            // Cleanup stream
+            if (videoRef.current && videoRef.current.srcObject) {
+                const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+                tracks.forEach(t => t.stop());
             }
         };
     }, []);
 
+    const predictWebcam = () => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const landmarker = faceLandmarkerRef.current;
+
+        if (video && canvas && landmarker) {
+            if (video.currentTime !== lastVideoTimeRef.current) {
+                lastVideoTimeRef.current = video.currentTime;
+
+                const startTimeMs = performance.now();
+                const results = landmarker.detectForVideo(video, startTimeMs);
+
+                // 1. Draw Video & Debug
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // Resize canvas to match video
+                    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                    }
+
+                    if (showVideo) {
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    }
+
+                    if (showDebug && results.faceLandmarks) {
+                        const drawingUtils = new DrawingUtils(ctx);
+                        for (const landmarks of results.faceLandmarks) {
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+                                { color: "#C0C0C070", lineWidth: 1 }
+                            );
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
+                                { color: "#FF3030", lineWidth: 2 }
+                            );
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW,
+                                { color: "#FF3030", lineWidth: 2 }
+                            );
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
+                                { color: "#30FF30", lineWidth: 2 }
+                            );
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW,
+                                { color: "#30FF30", lineWidth: 2 }
+                            );
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
+                                { color: "#E0E0E0", lineWidth: 1 }
+                            );
+                            drawingUtils.drawConnectors(
+                                landmarks,
+                                FaceLandmarker.FACE_LANDMARKS_LIPS,
+                                { color: "#E0E0E0", lineWidth: 2 }
+                            );
+                        }
+                    }
+                }
+
+                // 2. Update 3D Data
+                if (results.facialTransformationMatrixes && results.facialTransformationMatrixes.length > 0) {
+                    const matrix = new THREE.Matrix4().fromArray(results.facialTransformationMatrixes[0].data);
+                    setFaceMatrix(matrix);
+                } else {
+                    setFaceMatrix(null);
+                }
+
+                if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
+                    setBlendshapes(results.faceBlendshapes[0].categories);
+                }
+            }
+        }
+        requestRef.current = requestAnimationFrame(predictWebcam);
+    };
+
     return (
         <div className="flex flex-col gap-6">
             <div className="relative w-full aspect-[16/9] overflow-hidden rounded-2xl border border-white/5 bg-obsidian shadow-2xl">
-                {/* Hidden Video Input */}
                 <video
                     ref={videoRef}
-                    className="absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none"
+                    className="absolute inset-0 w-full h-full object-cover opacity-0"
+                    autoPlay
                     playsInline
                 />
-
-                {/* Output Canvas (2D) */}
                 <canvas
                     ref={canvasRef}
                     className="absolute inset-0 w-full h-full object-contain"
                 />
 
-                {/* 3D Canvas Layer */}
-                {showMask && (
+                {/* 3D Layer */}
+                {activeAvatar && (
                     <div className="absolute inset-0 pointer-events-none">
-                        <Canvas camera={{ position: [0, 0, 1], left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 100 }} orthographic>
+                        <Canvas camera={{ fov: 63, position: [0, 0, 0] }}>
+                            {/* Note: MediaPipe Matrix assumes a specific camera setup.
+                                Usually FOV ~63 deg (vertical) for 16:9, or matching the input video.
+                                The matrix is in world space relative to the camera at origin.
+                            */}
                             <ambientLight intensity={1.5} />
                             <directionalLight position={[0, 0, 1]} intensity={1} />
-                            <FaceMask3D resultsRef={resultsRef} maskImageSrc="/assets/face_texture_uv.png" />
+                            <Suspense fallback={null}>
+                                <AvatarMask
+                                    blendshapes={blendshapes}
+                                    matrix={faceMatrix}
+                                    url={activeAvatar === 'default'
+                                        ? 'https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb'
+                                        : '/assets/amir.glb'
+                                    }
+                                />
+                            </Suspense>
                         </Canvas>
                     </div>
                 )}
 
-                {showAvatar && (
-                    <div className="absolute inset-0 pointer-events-none">
-                        <Canvas camera={{ position: [0, 0, 1], left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 100 }} orthographic>
-                            <ambientLight intensity={1.5} />
-                            <directionalLight position={[0, 0, 1]} intensity={1} />
-                            <React.Suspense fallback={null}>
-                                <AvatarMask resultsRef={resultsRef} avatarUrl="https://models.readyplayer.me/692c53130e3d4bf2f2ee1d2b.glb" />
-                            </React.Suspense>
-                        </Canvas>
-                    </div>
-                )}
-
-                {/* Loading Overlay */}
                 {isLoading && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-10 transition-opacity duration-500">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-10">
                         <div className="w-12 h-12 border-2 border-skin border-t-transparent rounded-full animate-spin mb-4" />
-                        <p className="font-mono text-xs tracking-[0.2em] text-skin uppercase">Initializing Neural Net...</p>
+                        <p className="font-mono text-xs tracking-[0.2em] text-skin uppercase">Loading AI Model...</p>
                     </div>
                 )}
 
-                {/* Error Overlay */}
                 {error && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/90 z-20">
                         <p className="font-mono text-xs text-red-400 uppercase tracking-widest">{error}</p>
                     </div>
                 )}
-
-                {/* HUD Overlay */}
-                <div className="absolute top-4 left-4 z-10">
-                    <div className="rounded-full bg-black/40 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.3em] text-white/80 backdrop-blur border border-white/10">
-                        Face Mesh v2.0
-                    </div>
-                </div>
-
-                <div className="absolute top-4 right-4 z-10 text-right font-mono text-[10px] uppercase tracking-[0.3em] text-white/50 space-y-1">
-                    <div>FPS: <span className="text-skin">{fps}</span></div>
-                    <div>RES: {resolution}</div>
-                </div>
             </div>
 
-            {/* Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                     onClick={() => setShowVideo(!showVideo)}
-                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showVideo ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
-                        }`}
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showVideo ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'}`}
                 >
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 01</div>
                     <div className={`font-sans text-sm ${showVideo ? 'text-skin' : 'text-liquid-chrome'}`}>
@@ -518,35 +322,32 @@ export const FaceLandmarks = () => {
                 </button>
 
                 <button
-                    onClick={() => setShowMesh(!showMesh)}
-                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showMesh ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
-                        }`}
+                    onClick={() => setShowDebug(!showDebug)}
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showDebug ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'}`}
                 >
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 02</div>
-                    <div className={`font-sans text-sm ${showMesh ? 'text-skin' : 'text-liquid-chrome'}`}>
-                        {showMesh ? 'Mesh Overlay Active' : 'Mesh Overlay Disabled'}
+                    <div className={`font-sans text-sm ${showDebug ? 'text-skin' : 'text-liquid-chrome'}`}>
+                        {showDebug ? 'Debug Mesh Active' : 'Debug Mesh Disabled'}
                     </div>
                 </button>
 
                 <button
-                    onClick={() => setShowMask(!showMask)}
-                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showMask ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
-                        }`}
+                    onClick={() => setActiveAvatar(activeAvatar === 'default' ? null : 'default')}
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${activeAvatar === 'default' ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'}`}
                 >
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 03</div>
-                    <div className={`font-sans text-sm ${showMask ? 'text-skin' : 'text-liquid-chrome'}`}>
-                        {showMask ? 'Mask Overlay Active' : 'Mask Overlay Disabled'}
+                    <div className={`font-sans text-sm ${activeAvatar === 'default' ? 'text-skin' : 'text-liquid-chrome'}`}>
+                        {activeAvatar === 'default' ? 'Avatar: Default' : 'Avatar: Default'}
                     </div>
                 </button>
 
                 <button
-                    onClick={() => setShowAvatar(!showAvatar)}
-                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${showAvatar ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'
-                        }`}
+                    onClick={() => setActiveAvatar(activeAvatar === 'amir' ? null : 'amir')}
+                    className={`p-4 rounded-xl border transition-all duration-300 text-left group ${activeAvatar === 'amir' ? 'border-skin/50 bg-skin/5' : 'border-white/10 hover:border-white/20'}`}
                 >
                     <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-liquid-chrome/60 mb-1">Layer 04</div>
-                    <div className={`font-sans text-sm ${showAvatar ? 'text-skin' : 'text-liquid-chrome'}`}>
-                        {showAvatar ? 'Avatar Overlay Active' : 'Avatar Overlay Disabled'}
+                    <div className={`font-sans text-sm ${activeAvatar === 'amir' ? 'text-skin' : 'text-liquid-chrome'}`}>
+                        {activeAvatar === 'amir' ? 'Avatar: Amir' : 'Avatar: Amir'}
                     </div>
                 </button>
             </div>
